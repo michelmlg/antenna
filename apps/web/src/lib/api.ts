@@ -30,6 +30,7 @@ export interface MediaLite {
   views: number | null;
   uploadDate: string | null;
   thumbnailUrl: string | null;
+  resolvedId?: string | null;
   createdAt: string;
   categories?: { id: string; name: string; color: string }[];
 }

@@ -228,7 +228,7 @@ export function orderPool(pool: MediaRow[], ordering: string, playCounts: Map<st
   return list;
 }
 
-/** Rótulo do ingrediente para a UI ("🔍 Rocket League", "📺 @canal", …). */
+/** Rótulo do ingrediente para a UI (sem emojis — a web renderiza os ícones). */
 export function scopeLabel(ing: MixItem, sourcesById?: Map<string, { type: string; url: string; query: string }>): string {
   if (ing.scope === "links") return "links";
   if (ing.scope === "genre") return "gênero";
@@ -236,10 +236,10 @@ export function scopeLabel(ing: MixItem, sourcesById?: Map<string, { type: strin
   if (ing.scope === "source") {
     const s = sourcesById?.get(ing.sourceId || "");
     if (!s) return "fonte";
-    if (s.type === "search" || s.type === "channelSearch") return "🔍 " + (s.query || "busca");
+    if (s.type === "search" || s.type === "channelSearch") return `busca "${s.query || "-"}"`;
     if (s.type === "channel") {
       const tail = String(s.url || "").split("/").filter(Boolean).pop() || "canal";
-      return "📺 " + tail;
+      return "canal " + tail;
     }
     return "fonte";
   }

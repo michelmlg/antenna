@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type GenreRow, type ProgramRow } from "../lib/api";
 import { Badge, Button, Card, Empty, ErrorMsg, Field, Spinner } from "../components/ui";
+import { GenreIcon } from "../lib/icons";
 
 export default function Programas() {
   const qc = useQueryClient();
@@ -39,7 +40,7 @@ export default function Programas() {
               <option value="">— sem gênero —</option>
               {(genres ?? []).map((g) => (
                 <option key={g.id} value={g.id}>
-                  {g.icon} {g.name}
+                  {g.name}
                 </option>
               ))}
             </select>
@@ -71,7 +72,7 @@ export default function Programas() {
               {programs.map((p) => (
                 <tr key={p.id} className="border-t border-muted/10">
                   <td className="py-2 font-medium">{p.name}</td>
-                  <td className="py-2 text-muted">{p.genre ? `${p.genre.icon} ${p.genre.name}` : "—"}</td>
+                  <td className="py-2 text-muted">{p.genre ? <span className="flex items-center gap-1"><GenreIcon name={p.genre.icon} size={13} /> {p.genre.name}</span> : "—"}</td>
                   <td className="py-2">{p._count?.schedule ?? 0}</td>
                   <td className="py-2">{p.status === "active" ? <Badge tone="green">ativo</Badge> : <Badge>inativo</Badge>}</td>
                   <td className="py-2 text-right">

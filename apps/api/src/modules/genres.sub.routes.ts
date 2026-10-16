@@ -112,6 +112,40 @@ sub.post(
   })
 );
 
+// GET /genres/:id/sources/:sid/media — vídeos da fonte (ativos + inativos)
+sub.get(
+  "/sources/:sid/media",
+  wrap(async (req, res) => {
+    const source = await prisma.source.findUnique({ where: { id: req.params.sid } });
+    if (!source || source.genreId !== req.params.id) throw new HttpError(404, "fonte não encontrada");
+    const items = await prisma.media.findMany({
+      where: { originSourceId: source.id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true, title: true, url: true, duration: true, source: true, status: true,
+        channelTitle: true, views: true, uploadDate: true, thumbnailUrl: true, resolvedId: true, createdAt: true,
+      },
+    });
+    res.json({ items, rawTotal: items.length });
+  })
+);
+
+// PATCH /genres/:id/media/:mediaId { status } — remover da programação (inativo
+// = arquivado: dedupe preserva, sync não re-adiciona; reativar quando quiser)
+sub.patch(
+  "/media/:mediaId",
+  wrap(async (req, res) => {
+    const status = req.body?.status;
+    if (!["ativo", "inativo"].includes(status)) throw new HttpError(400, "status: ativo|inativo");
+    const media = await prisma.media.findUnique({ where: { id: req.params.mediaId } });
+    if (!media) throw new HttpError(404, "mídia não encontrada");
+    const srcRow = media.originSourceId ? await prisma.source.findUnique({ where: { id: media.originSourceId }, select: { genreId: true } }) : null;
+    if (srcRow?.genreId !== req.params.id) throw new HttpError(404, "mídia não pertence a este gênero");
+    const updated = await prisma.media.update({ where: { id: media.id }, data: { status } });
+    res.json({ id: updated.id, status: updated.status });
+  })
+);
+
 // DELETE /genres/:id/links/:itemId — remove link manual
 sub.delete(
   "/links/:itemId",

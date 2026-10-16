@@ -174,8 +174,8 @@ describe("orderPool / scopeLabel", () => {
       ["s1", { type: "search", url: "", query: "Rocket League" }],
       ["s2", { type: "channel", url: "https://www.youtube.com/@FAGames1", query: "" }],
     ]);
-    expect(scopeLabel(mix("source", 1, "s1"), sources)).toBe("🔍 Rocket League");
-    expect(scopeLabel(mix("source", 1, "s2"), sources)).toBe("📺 @FAGames1");
+    expect(scopeLabel(mix("source", 1, "s1"), sources)).toBe('busca "Rocket League"');
+    expect(scopeLabel(mix("source", 1, "s2"), sources)).toBe("canal @FAGames1");
     expect(scopeLabel(mix("genre", 1))).toBe("gênero");
   });
 });

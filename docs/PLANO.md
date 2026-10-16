@@ -218,3 +218,60 @@ ffmpeg é classificado (avisos do decodificador, como "Late SEI", não viram las
 ### 14.4 ffmpeg 7 (experimento aprovado)
 - Build estático (BtbN, pinado) no container `playout` para eliminar o warning
   "Late SEI" na origem; validado com um vídeo real; rollback = voltar ao ffmpeg do apt.
+
+## 15. v2.2 — Tela do gênero: sync interativo, CRUD de vídeos, ícones, layout
+
+### 15.1 Sync interativo (o que o antigo fazia melhor)
+- Ao sincronizar (canal/busca/busca-no-canal), o resultado abre **dentro do bloco
+  da fonte**: grid de thumbs com título/duração/canal de cada vídeo encontrado.
+- Bloco da fonte mostra "N de M passam os filtros" e botão ver todos.
+- O sync passa a rodar em foreground com estados (sincronizando… → resultado no bloco).
+
+### 15.2 CRUD de vídeos por fonte
+- **GET** `/genres/:id/sources/:sid/media` — vídeos da fonte (inclui inativos).
+- **PATCH** `/genres/:id/media/:id { status }` — remover = `inativo` (arquivado:
+  dedupe preserva, nunca volta no sync; pode reativar de lá). Apagar de vez = DELETE (cuidado).
+- **Adicionar manualmente** continua pelo tipo `vídeo` (link direto + probe) —
+  botão visível na mesma barra "Adicionar fonte".
+- API de fonte criada passa a ter um `sync` que responde com os vídeos adicionados.
+
+### 15.3 Ícones lucide em vez de emojis
+- `Genre.icon` passa a guardar o **nome do ícone lucide** (`fish`, `gamepad-2`,
+  `newspaper`…); galeria curada (~24 ícones) no picker do painel.
+- Migração: script mapeia os emojis existentes (`🎭→drama`, `🎮→gamepad-2`,
+  `📰→newspaper`, `🐟→fish`) e deixa "" para o resto (renderiza ícone padrão).
+- Um único componente `<GenreIcon name?>` resolve nome → componente lucide.
+
+### 15.4 Layout da tela do gênero
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ ← Gêneros   [icon] Gameplays        ordem: menos reproduzidos  ativo ●  ✎ │  identidade inline (nome/ícone/status/janela anti-rep.)
+├────────────────────────────────────────────────────────────────────────────┤
+│ ADICIONAR FONTE                                                            │
+│ [ Canal ] [ Busca ] [ Busca no canal ] [ Vídeo (manual) ]                   │
+│ ┌──────────────────────────────────────────────────────────────┐ [Adicionar]│
+│ │ https://youtube.com/@canal                     limite 12    │            │
+│ └──────────────────────────────────────────────────────────────┘            │
+├────────────────────────────────────────────────────────────────────────────┤
+│ FONTES (3)                                                    [↻ Sync geral]│
+│ ┌ ▾  canal @FAGames1        12 vídeos (12 passam filtros)  ↻ ⚙ ⏸ 🗑        │
+│ │   ┌──────┬──────┬──────┬──────┬──────┬──────┐                             │
+│ │   │thumb │thumb │thumb │thumb │thumb │thumb │  ← grid 6 col               │
+│ │   │título│título│título│título│título│título│    hover: (re)ativar        │
+│ │   └──────┴──────┴──────┴──────┴──────┴──────┘    remover / ver mais →     │
+│ └──────────────────────────────────────────────────────────────────────────┘
+│ ┌ ▸  busca "Rocket League"  12 vídeos (+3 fora do filtro) ↻ ⚙ ⏸ 🗑 (fechado)│
+│ └────────────────── expandir revela o mesmo grid de vídeos ────────────────┘
+├────────────────────────────────────────────────────────────────────────────┤
+│ MISTURA        3× canal A → 2× busca B → 1× gênero            [editar]     │
+│ (chips com fonte, contador e reordenação; salva em lote)                    │
+├────────────────────────────────────────────────────────────────────────────┤
+│ SIMULADOR [8 ▾] [Simular] → 01 thumb · tag gênero · título · dur · link ↗   │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+- Identidade (nome, ícone, cor, status, janela anti-repetição, ordenação) vira
+  uma faixa compacta editável no cabeçalho — sai do lugar de "form solto".
+- Fonte em cima (form) → lista de fontes embaixo, cada uma com o CRUD de vídeos
+  dentro do bloco (grid de thumbs, filtrável ativo/inativo).

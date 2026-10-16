@@ -4,6 +4,7 @@ import { ExternalLink, SkipForward } from "lucide-react";
 import { api, type HistoryRow, type PlayoutState, type QueueItemView, type ScheduleRow, type StreamInfo } from "../lib/api";
 import { Badge, Button, Card, Empty, Spinner, fmtDur } from "../components/ui";
 import { LivePlayer } from "../components/LivePlayer";
+import { GenreIcon } from "../lib/icons";
 
 function thumbOf(item: QueueItemView): string | null {
   if (item.thumbnailUrl) return item.thumbnailUrl;
@@ -49,10 +50,10 @@ function QueueList({ items, program }: { items: QueueItemView[]; program: string
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                 {it.genre && (
                   <span
-                    className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-background"
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold text-background"
                     style={{ background: it.genre.color || "#3b82f6" }}
                   >
-                    {it.genre.icon} {it.genre.name}
+                    <GenreIcon name={it.genre.icon} size={10} /> {it.genre.name}
                   </span>
                 )}
                 {it.channelTitle && <span className="text-[11px] text-muted">{it.channelTitle}</span>}
@@ -160,10 +161,10 @@ export default function NoAr() {
                   {r.startTime}–{r.endTime}
                 </span>
                 <span
-                  className="rounded px-1.5 py-0.5 text-xs font-medium text-background"
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-background"
                   style={{ background: r.program.genre?.color || "#3b82f6" }}
                 >
-                  {r.program.genre?.icon} {r.program.name}
+                  <GenreIcon name={r.program.genre?.icon} size={12} /> {r.program.name}
                 </span>
               </li>
             ))}

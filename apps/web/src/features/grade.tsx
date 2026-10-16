@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { api, type GenreRow, type ScheduleRow } from "../lib/api";
 import { Badge, Button, Card, Empty, ErrorMsg, Field, Modal, Spinner } from "../components/ui";
+import { GenreIcon } from "../lib/icons";
 
 const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -31,7 +32,7 @@ function BlocoModal({ onClose }: { onClose: () => void }) {
             <option value="">— escolha —</option>
             {(genres ?? []).map((g) => (
               <option key={g.id} value={g.id}>
-                {g.icon} {g.name}
+                {g.name}
               </option>
             ))}
           </select>
@@ -122,10 +123,10 @@ export default function Grade() {
                         </Button>
                       </div>
                       <div
-                        className="mt-1 rounded px-1.5 py-1 text-xs font-medium text-background"
+                        className="mt-1 flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium text-background"
                         style={{ background: r.program.genre?.color || "#3b82f6" }}
                       >
-                        {r.program.genre?.icon} {r.program.name}
+                        <GenreIcon name={r.program.genre?.icon} size={12} /> {r.program.name}
                       </div>
                     </li>
                   ))}

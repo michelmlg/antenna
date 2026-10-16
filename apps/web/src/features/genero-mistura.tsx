@@ -88,7 +88,7 @@ export function Mistura({ genre }: { genre: GenreDetail }) {
                   <option value="">— escolha a fonte —</option>
                   {genre.sources.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.type === "search" || s.type === "channelSearch" ? `🔍 ${s.query}` : `📺 ${s.url}`}
+                      {s.type === "search" || s.type === "channelSearch" ? `busca "${s.query}"` : s.url.replace("https://www.youtube.com/", "")}
                     </option>
                   ))}
                 </select>
