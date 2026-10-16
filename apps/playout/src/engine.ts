@@ -85,6 +85,15 @@ export function spawnFFmpeg(inputs: string[], videoCodec: string | null, onError
   return proc;
 }
 
+// stderr do FFmpeg: AVISOS do decodificador (Late SEI etc.) ficam só no log;
+// só ERROS reais (falha de rede, 403, conexão recusada) viram lastError do painel.
+const FFMPEG_WARNING_RE = /^\[(h264|hevc|av1|vp9|https|tls|tcp|mpegts|aac|flv|mov)\b|^frame= |Last message repeated/i;
+
+export function isFfmpegError(line: string): boolean {
+  if (FFMPEG_WARNING_RE.test(line)) return false;
+  return /error|failed|refused|forbidden|invalid|could not|no such|unable|timed out|connection lost/i.test(line);
+}
+
 export function killProc(proc: ChildProcess | null): void {
   if (!proc) return;
   try {

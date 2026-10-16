@@ -8,7 +8,7 @@ import type { PlayoutStatePayload } from "@antenna/shared";
 import { composeCycle, fallbackMedia, selectAuto } from "@antenna/core";
 import { currentBlock } from "@antenna/core";
 import { config } from "./config";
-import { isYoutube, killProc, probeVideoCodec, resolveInput, spawnFFmpeg } from "./engine";
+import { isFfmpegError, isYoutube, killProc, probeVideoCodec, resolveInput, spawnFFmpeg } from "./engine";
 import { writeState } from "./state";
 
 type Picked = {
@@ -33,8 +33,12 @@ const state = {
 };
 
 function onFfmpegLine(line: string): void {
-  state.lastError = line;
-  console.log("[ffmpeg]", line);
+  if (isFfmpegError(line)) {
+    state.lastError = line;
+    console.log("[ffmpeg] ERRO:", line);
+  } else {
+    console.log("[ffmpeg]", line); // avisos ficam só no log do worker
+  }
 }
 
 // ---- bloco agendado agora (grade semanal) ----
