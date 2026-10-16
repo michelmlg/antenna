@@ -35,6 +35,7 @@ export async function writeFallback(mediaId: string | null): Promise<void> {
     since: null,
     current: null,
     next: null,
+    queue: [],
     errors: 0,
     restarts: 0,
     lastError: null,

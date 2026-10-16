@@ -4,7 +4,7 @@
  * Prioridade de escolha: gênero da grade (mistura viva) → seleção automática → fallback.
  */
 import { prisma } from "@antenna/database";
-import type { PlayoutStatePayload } from "@antenna/shared";
+import type { PlayoutStatePayload, QueueItem } from "@antenna/shared";
 import { composeCycle, fallbackMedia, selectAuto } from "@antenna/core";
 import { currentBlock } from "@antenna/core";
 import { config } from "./config";
@@ -17,12 +17,17 @@ type Picked = {
   isFallback?: boolean;
 };
 
+const QUEUE_BATCH = 10; // itens gerados por vez
+const QUEUE_MIN = 2; // repõe o lote quando resta <= MIN
+
 const state = {
   running: false,
   timer: null as ReturnType<typeof setInterval> | null,
   proc: null as ReturnType<typeof spawnFFmpeg> | null,
   current: null as (Picked & { startedAt: Date; historyId: string; pid: number | null }) | null,
   next: null as { title: string; program: string | null } | null,
+  queue: [] as QueueItem[],
+  queuedProgram: null as { id: string; name: string } | null, // a fila pertence a este programa
   since: null as Date | null,
   cooldownUntil: 0,
   starting: false, // um startItem em andamento (evita dois FFmpeg juntos)
@@ -60,16 +65,81 @@ async function scheduledProgram(): Promise<{ id: string; name: string; genreId: 
   };
 }
 
-// ---- próxima mídia: gênero (mistura viva) → automática → fallback ----
-async function pickNext(program: Awaited<ReturnType<typeof scheduledProgram>>): Promise<Picked | null> {
+// ---- fila estável: gerada UMA VEZ, consumida em ordem ----
+type MediaLike = { id: string; title: string; url: string; source: string; duration: number; resolvedId: string | null; channelTitle: string | null; thumbnailUrl: string | null; originSourceId: string | null };
+
+function toQueueItem(m: MediaLike, genre: QueueItem["genre"]): QueueItem {
+  return {
+    mediaId: m.id, title: m.title, url: m.url, source: m.source, duration: m.duration || 0,
+    resolvedId: m.resolvedId, channelTitle: m.channelTitle, thumbnailUrl: m.thumbnailUrl, genre,
+  };
+}
+
+/** Gênero de cada mídia gerada (via fonte de origem; links manuais herdam o gênero do bloco). */
+async function genreFor(medias: MediaLike[], blockGenre: QueueItem["genre"]): Promise<Map<string, QueueItem["genre"]>> {
+  const originIds = [...new Set(medias.map((m) => m.originSourceId).filter(Boolean))] as string[];
+  const map = new Map<string, QueueItem["genre"]>();
+  if (originIds.length) {
+    const sources = await prisma.source.findMany({
+      where: { id: { in: originIds } },
+      select: { id: true, genre: { select: { name: true, color: true, icon: true } } },
+    });
+    for (const s of sources) map.set(s.id, s.genre);
+  }
+  const out = new Map<string, QueueItem["genre"]>();
+  for (const m of medias) out.set(m.id, m.originSourceId ? (map.get(m.originSourceId) ?? null) : blockGenre);
+  return out;
+}
+
+/** Repõe a fila quando ela esvazia (ou pertence a outro programa). */
+async function ensureQueue(program: Awaited<ReturnType<typeof scheduledProgram>>): Promise<void> {
+  const progRef = program ? { id: program.id, name: program.name } : null;
+
+  // bloco da grade mudou → a fila antiga não serve mais
+  // (?? null em AMBOS os lados: undefined !== null sempre seria true)
+  if ((state.queuedProgram?.id ?? null) !== (progRef?.id ?? null)) {
+    state.queue = [];
+    state.queuedProgram = progRef;
+  }
+  if (state.queue.length > QUEUE_MIN) return;
+
+  const excludeIds = [...new Set([state.current?.media.id, ...state.queue.map((q) => q.mediaId)].filter(Boolean) as string[])];
+  let fresh: QueueItem[] = [];
+
   if (program && program.genreId && program.genreStatus !== "pausado") {
-    const [item] = await composeCycle(
-      program.genreId,
-      1,
-      program.mixOverride,
-      state.current ? [state.current.media.id] : []
-    );
-    if (item) return { media: item.media, program };
+    const blockGenre = await prisma.genre.findUnique({
+      where: { id: program.genreId },
+      select: { name: true, color: true, icon: true },
+    });
+    const plan = await composeCycle(program.genreId, QUEUE_BATCH, program.mixOverride, excludeIds);
+    const genres = await genreFor(plan.map((p) => p.media), blockGenre);
+    fresh = plan.map((p) => toQueueItem(p.media, genres.get(p.media.id) ?? null));
+  } else {
+    const autos = await selectAuto({ recentCount: 20, limit: QUEUE_BATCH, excludeIds });
+    const genres = await genreFor(autos, null);
+    fresh = autos.map((m) => toQueueItem(m, genres.get(m.id) ?? null));
+  }
+
+  const have = new Set(state.queue.map((q) => q.mediaId));
+  for (const item of fresh) {
+    if (state.queue.length >= QUEUE_BATCH) break;
+    if (!have.has(item.mediaId)) {
+      state.queue.push(item);
+      have.add(item.mediaId);
+    }
+  }
+}
+
+// ---- próxima mídia: consome a fila → automática única → fallback ----
+async function pickNext(program: Awaited<ReturnType<typeof scheduledProgram>>): Promise<Picked | null> {
+  await ensureQueue(program);
+
+  const head = state.queue.shift();
+  if (head) {
+    return {
+      media: { id: head.mediaId, title: head.title, url: head.url, source: head.source, duration: head.duration },
+      program: program ? { id: program.id, name: program.name } : null,
+    };
   }
 
   const [auto] = await selectAuto({ recentCount: 10, limit: 1 });
@@ -195,12 +265,10 @@ async function tick(): Promise<void> {
       }
     }
 
-    if (state.current) {
-      const nextPicked = await pickNext(program);
-      state.next = nextPicked
-        ? { title: nextPicked.media.title, program: nextPicked.program ? nextPicked.program.name : null }
-        : null;
-    }
+    // "next" vem da fila persistida — NUNCA consome (pickNext shift de verdade)
+    state.next = state.queue[0]
+      ? { title: state.queue[0].title, program: state.queuedProgram?.name ?? null }
+      : null;
   } catch (err) {
     state.lastError = err instanceof Error ? err.message : String(err);
     console.error("[playout] tick:", err);
@@ -251,49 +319,36 @@ async function setFallback(mediaId: string | null): Promise<void> {
   state.fallbackMediaId = mediaId;
 }
 
-// ---- fila projetada ("No Ar") ----
-export async function planQueue(count = 5) {
-  const n = Math.min(Math.max(Number(count) || 5, 1), 20);
+/** Pula a mídia atual e avança imediatamente para o próximo da fila. */
+async function skipNext(): Promise<void> {
+  if (state.starting) return;
+  if (!state.running) {
+    await start();
+    return;
+  }
+  await finishCurrent("skipped");
+  killProc(state.proc);
+  state.proc = null;
+  state.cooldownUntil = 0;
   const program = await scheduledProgram();
-
-  if (program && program.genreId && program.genreStatus !== "pausado") {
-    const plan = await composeCycle(
-      program.genreId,
-      n,
-      program.mixOverride,
-      state.current ? [state.current.media.id] : []
-    );
-    return {
-      program: program.name,
-      approx: program.orderingPadrao === "aleatoria",
-      window: program.antiRepeatWindow,
-      items: plan.map((it) => ({
-        mediaId: it.media.id,
-        title: it.media.title,
-        source: it.media.source,
-        duration: it.media.duration || 0,
-        scope: it.scope,
-        scopeLabel: it.scopeLabel,
-      })),
-    };
+  const picked = await pickNext(program);
+  if (picked) {
+    await startItem(picked);
+  } else {
+    state.lastError = "Nenhum conteúdo disponível";
+    state.cooldownUntil = Date.now() + 5000;
   }
+  await publish().catch(() => {});
+}
 
-  // fora da grade: projeção = aleatória com histórico virtual (janela 10)
-  const rows = (
-    await prisma.playbackHistory.findMany({
-      take: 10,
-      orderBy: { startedAt: "desc" },
-      select: { mediaId: true },
-    })
-  ).map((r) => r.mediaId);
-  const items: { mediaId: string; title: string; source: string; duration: number }[] = [];
-  for (let i = 0; i < n; i++) {
-    const [m] = await selectAuto({ excludeIds: [...new Set(rows)], limit: 1 });
-    if (!m) break;
-    items.push({ mediaId: m.id, title: m.title, source: m.source, duration: m.duration || 0 });
-    rows.unshift(m.id);
-  }
-  return { program: null, approx: true, window: 10, items };
+// ---- fila projetada: lê a fila PERSISTIDA (não recalcula nada) ----
+export async function planQueue() {
+  return {
+    program: state.current?.program?.name ?? state.queuedProgram?.name ?? null,
+    approx: false, // a fila é a sequência real; só muda com Pular ou troca de bloco
+    window: null,
+    items: state.queue,
+  };
 }
 
 // ---- publicação de estado ----
@@ -317,6 +372,7 @@ function payload(): PlayoutStatePayload {
         }
       : null,
     next: state.next,
+    queue: state.queue,
     errors: state.errors,
     restarts: state.restarts,
     lastError: state.lastError,
@@ -332,4 +388,13 @@ function getState() {
   return payload();
 }
 
-export const playout = { start, stop, playNow, setFallback, getState, planQueue };
+/** Restaura a fila persistida (worker reiniciou sem trocar de bloco). */
+function restoreQueue(items: QueueItem[], program: { id: string; name: string } | null): void {
+  if (items.length) {
+    state.queue = items;
+    state.queuedProgram = program;
+    console.log(`[playout] fila restaurada: ${items.length} item(ns)`);
+  }
+}
+
+export const playout = { start, stop, playNow, skipNext, setFallback, getState, planQueue, restoreQueue };

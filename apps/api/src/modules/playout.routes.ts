@@ -53,6 +53,14 @@ playoutRoutes.post(
   })
 );
 
+// POST /playout/next — pula a mídia atual e avança a fila
+playoutRoutes.post(
+  "/next",
+  wrap(async (_req, res) => {
+    res.json(await worker.post("/cmd/next", {}, 60000));
+  })
+);
+
 playoutRoutes.get(
   "/queue",
   wrap(async (req, res) => {

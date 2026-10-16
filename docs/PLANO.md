@@ -184,3 +184,37 @@ As fases 0–5 não tocam no canal do v1: ele continua no ar até a Fase 9.
 | yt-dlp quebrando (YouTube muda) | versão pinned no Dockerfile + comando de update documentado |
 | Complexidade de 2 processos | estado no banco (painel à prova de restart) + control HTTP interno simples |
 | Perder dados na migração | script com validação de contagens e execução idempotente |
+
+## 14. v2.1 — Player e fila estável (No Ar)
+
+Correções já aplicadas no cutover (commit `fix(stream)`): nginx reescreve o redirect
+do cookie-check do MediaMTX (o player recebia HTML em vez de playlist) e o stderr do
+ffmpeg é classificado (avisos do decodificador, como "Late SEI", não viram lastError).
+
+### 14.1 LivePlayer (componente reutilizável)
+- `components/LivePlayer.tsx`: hls.js + estados (connecting / live / stalled / offline) + `<Loader>` reutilizável.
+- Banner AO VIVO (ponto pulsante âmbar), OFFLINE e RECONECTANDO.
+- Botões no overlay (paridade v1): som mudo/ligado, reconectar, tela cheia.
+- **Auto-reload na troca de mídia** via SSE (hoje o player fica no stream velho).
+- Watchdog: currentTime parado 10s → reconexão com backoff (1s→2s→4s… máx 30s).
+- Latência: `liveSyncDurationCount: 3` (~4–6s atrás do ao vivo).
+
+### 14.2 Fila estável (reformulação da lógica de transmissão)
+- **A fila passa a ser gerada UMA VEZ e consumida em ordem** — hoje o composer
+  recalcula a cada escolha (ordenar por "menos reproduzidos" reordena sozinho).
+- Worker mantém `state.queue` (persistida no payload de `PlayoutState`):
+  - gera lote de 10 ao entrar num bloco da grade / ao esvaziar (repõe quando ≤ 1);
+  - `pickNext` = `queue.shift()` (sem recomputar nada);
+  - regenera só quando: bloco da grade muda, fila esvaziou ou boot;
+  - exclusões na geração: no ar + ids já na fila + janela anti-repetição global.
+- Painel exibe a fila persistida (estável, sem embaralhar a cada tick).
+
+### 14.3 No Ar — fila enriquecida + Pular
+- Cada item da fila: **thumbnail** (do sync; fallback `i.ytimg.com` pelo resolvedId),
+  **tag do gênero** (cor+ícone), **nome do canal**, duração e **link para o vídeo**.
+- Botão **Pular** (`POST /playout/next` → worker `/cmd/next`): encerra a mídia atual
+  (resultado "skipped") e avança imediatamente para o próximo da fila.
+
+### 14.4 ffmpeg 7 (experimento aprovado)
+- Build estático (BtbN, pinado) no container `playout` para eliminar o warning
+  "Late SEI" na origem; validado com um vídeo real; rollback = voltar ao ffmpeg do apt.

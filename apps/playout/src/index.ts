@@ -9,11 +9,18 @@ async function main() {
   await setupDb();
   console.log("[db] conectado");
 
-  // restaura o fallback persistido (sobrevive a restarts)
+  // restaura o fallback e a fila persistidos (sobrevivem a restarts)
   const persisted = await readState();
   if (!config.fallbackMediaId && persisted?.fallbackMediaId) {
     await playout.setFallback(persisted.fallbackMediaId);
     await writeFallback(persisted.fallbackMediaId);
+  }
+  if (persisted?.queue?.length) {
+    const prog =
+      persisted.current?.programId != null
+        ? { id: persisted.current.programId, name: persisted.current.programName ?? "" }
+        : null;
+    playout.restoreQueue(persisted.queue, prog);
   }
 
   if (config.autoplay) {

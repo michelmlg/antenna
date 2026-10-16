@@ -98,6 +98,18 @@ export interface ScheduleRow {
   };
 }
 
+export interface QueueItemView {
+  mediaId: string;
+  title: string;
+  url: string;
+  source: string;
+  duration: number;
+  resolvedId: string | null;
+  channelTitle: string | null;
+  thumbnailUrl: string | null;
+  genre: { name: string; color: string; icon: string } | null;
+}
+
 export interface PlayoutState {
   running: boolean;
   channel: string;
@@ -115,6 +127,7 @@ export interface PlayoutState {
     isFallback: boolean;
   } | null;
   next: { title: string; program: string | null } | null;
+  queue: QueueItemView[];
   errors: number;
   restarts: number;
   lastError: string | null;
@@ -127,7 +140,7 @@ export interface QueuePlan {
   program: string | null;
   approx: boolean;
   window: number | null;
-  items: { mediaId: string; title: string; source: string; duration: number; scope?: string; scopeLabel?: string }[];
+  items: QueueItemView[];
 }
 
 export interface HistoryRow {

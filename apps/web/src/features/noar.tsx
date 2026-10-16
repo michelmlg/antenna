@@ -1,32 +1,14 @@
-/** No Ar — player, agora tocando, fila, grade de hoje, últimos exibidos. */
-import { useEffect, useRef } from "react";
+/** No Ar — LivePlayer, agora tocando, fila estável (thumbs/gênero/canal/link), Pular. */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import Hls from "hls.js";
-import { api, type HistoryRow, type PlayoutState, type QueuePlan, type ScheduleRow, type StreamInfo } from "../lib/api";
-import { Badge, Button, Card, Empty, ErrorMsg, Spinner, fmtDur } from "../components/ui";
+import { ExternalLink, SkipForward } from "lucide-react";
+import { api, type HistoryRow, type PlayoutState, type QueueItemView, type ScheduleRow, type StreamInfo } from "../lib/api";
+import { Badge, Button, Card, Empty, Spinner, fmtDur } from "../components/ui";
+import { LivePlayer } from "../components/LivePlayer";
 
-function Player({ url }: { url: string | null }) {
-  const ref = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const video = ref.current;
-    if (!video || !url) return;
-    let hls: Hls | null = null;
-    if (Hls.isSupported()) {
-      hls = new Hls({ lowLatencyMode: false });
-      hls.loadSource(url);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = url;
-      video.play().catch(() => {});
-    }
-    return () => hls?.destroy();
-  }, [url]);
-
-  return (
-    <video ref={ref} playsInline muted autoPlay controls className="aspect-video w-full rounded-lg bg-black" />
-  );
+function thumbOf(item: QueueItemView): string | null {
+  if (item.thumbnailUrl) return item.thumbnailUrl;
+  if (item.resolvedId) return `https://i.ytimg.com/vi/${item.resolvedId}/mqdefault.jpg`;
+  return null;
 }
 
 function Progress({ startedAt, duration }: { startedAt: string; duration: number }) {
@@ -45,6 +27,59 @@ function Progress({ startedAt, duration }: { startedAt: string; duration: number
   );
 }
 
+function QueueList({ items, program }: { items: QueueItemView[]; program: string | null }) {
+  if (!items.length) return <Empty>fila vazia — gerando a próxima sequência…</Empty>;
+  return (
+    <ol className="space-y-2">
+      {items.map((it, i) => {
+        const thumb = thumbOf(it);
+        const isYT = it.source === "youtube";
+        return (
+          <li key={`${it.mediaId}-${i}`} className="flex items-center gap-2.5 rounded border border-muted/10 bg-background/40 p-2">
+            <span className="w-5 text-center font-mono text-xs text-muted">{i + 1}</span>
+            {thumb ? (
+              <img src={thumb} alt="" loading="lazy" className="h-10 w-[71px] shrink-0 rounded object-cover" />
+            ) : (
+              <div className="flex h-10 w-[71px] shrink-0 items-center justify-center rounded bg-muted/10 text-[10px] text-muted">
+                {it.source}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="line-clamp-1 text-sm">{it.title}</div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                {it.genre && (
+                  <span
+                    className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-background"
+                    style={{ background: it.genre.color || "#3b82f6" }}
+                  >
+                    {it.genre.icon} {it.genre.name}
+                  </span>
+                )}
+                {it.channelTitle && <span className="text-[11px] text-muted">{it.channelTitle}</span>}
+                <span className="text-[11px] text-muted">{fmtDur(it.duration)}</span>
+              </div>
+            </div>
+            {isYT && (
+              <a
+                href={it.url}
+                target="_blank"
+                rel="noreferrer"
+                title="Abrir no YouTube"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-muted/10 hover:text-signal"
+              >
+                <ExternalLink size={14} />
+              </a>
+            )}
+          </li>
+        );
+      })}
+      {program && (
+        <li className="pt-1 text-right text-[11px] text-muted">bloco: {program} · a fila muda só com Pular ou troca de bloco</li>
+      )}
+    </ol>
+  );
+}
+
 export default function NoAr() {
   const { data: state } = useQuery({
     queryKey: ["playout-state"],
@@ -52,31 +87,21 @@ export default function NoAr() {
     refetchInterval: 5000,
   });
   const { data: stream } = useQuery({ queryKey: ["stream"], queryFn: () => api.get<StreamInfo>("/stream") });
-  const { data: queue } = useQuery({
-    queryKey: ["playout-queue"],
-    queryFn: () => api.get<QueuePlan>("/playout/queue?count=6"),
-    refetchInterval: 15000,
-  });
   const { data: schedule } = useQuery({ queryKey: ["schedule"], queryFn: () => api.get<ScheduleRow[]>("/schedule") });
-  const { data: history } = useQuery({
-    queryKey: ["history"],
-    queryFn: () => api.get<HistoryRow[]>("/playout/history?take=8"),
-    refetchInterval: 10000,
-  });
 
   const start = useMutation({ mutationFn: () => api.post("/playout/start") });
   const stop = useMutation({ mutationFn: () => api.post("/playout/stop") });
+  const skip = useMutation({ mutationFn: () => api.post("/playout/next") });
 
   const hlsUrl = stream ? `${location.origin}${stream.hlsPath}` : null;
   const cur = state?.current;
-
   const today = (schedule ?? []).filter((r) => r.dayOfWeek === new Date().getDay());
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
       {/* player */}
       <Card className="xl:col-span-2">
-        <Player url={hlsUrl} />
+        <LivePlayer src={hlsUrl} live={!!state?.running} mediaKey={cur?.mediaId} />
         <div className="mt-3 space-y-1 text-xs text-muted">
           <div>
             HLS <code className="text-foreground">{hlsUrl || "—"}</code>
@@ -88,7 +113,7 @@ export default function NoAr() {
         </div>
       </Card>
 
-      {/* agora + fila */}
+      {/* agora + controles + fila */}
       <Card>
         <div className="mb-2 flex items-center gap-2">
           {cur ? <Badge tone="signal">NO AR</Badge> : <Badge>{state?.running ? "sintonizando…" : "parado"}</Badge>}
@@ -99,22 +124,6 @@ export default function NoAr() {
         {cur && <Progress startedAt={cur.startedAt} duration={cur.duration} />}
         {state?.lastError && <p className="mt-2 line-clamp-2 text-[11px] text-red-400">⚠ {state.lastError}</p>}
 
-        <div className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">Fila projetada</div>
-        {queue ? (
-          <ol className="mt-2 space-y-1.5">
-            {queue.items.length === 0 && <li className="text-xs text-muted">vazia</li>}
-            {queue.items.map((it, i) => (
-              <li key={`${it.mediaId}-${i}`} className="flex items-baseline gap-2 text-sm">
-                <span className="text-muted">{i + 1}.</span>
-                <span className="line-clamp-1 flex-1">{it.title}</span>
-                <span className="text-[11px] text-muted">{fmtDur(it.duration)}</span>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <Spinner />
-        )}
-
         <div className="mt-4 flex gap-2">
           <Button variant="signal" onClick={() => start.mutate()} disabled={!!state?.running}>
             Iniciar playout
@@ -122,14 +131,25 @@ export default function NoAr() {
           <Button onClick={() => stop.mutate()} disabled={!state?.running}>
             Parar
           </Button>
+          <Button onClick={() => skip.mutate()} disabled={!state?.running} title="Pular para o próximo da fila">
+            <span className="flex items-center gap-1.5">
+              <SkipForward size={14} /> Pular
+            </span>
+          </Button>
+        </div>
+        {skip.isPending && <Spinner label="pulando…" />}
+
+        <div className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted">
+          Próximos na programação
+        </div>
+        <div className="mt-2">
+          <QueueList items={state?.queue ?? []} program={cur?.programName ?? state?.next?.program ?? null} />
         </div>
       </Card>
 
       {/* grade de hoje */}
       <Card>
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-          Programação de hoje
-        </div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Programação de hoje</div>
         {today.length === 0 ? (
           <Empty>sem blocos hoje — seleção automática</Empty>
         ) : (
@@ -154,33 +174,10 @@ export default function NoAr() {
       {/* últimos exibidos */}
       <Card className="xl:col-span-2">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Últimos exibidos</div>
-        {history ? (
-          <table className="w-full text-sm">
-            <tbody>
-              {history.map((h) => (
-                <tr key={h.id} className="border-t border-muted/10">
-                  <td className="py-1.5 pr-2 font-mono text-xs text-muted">{fmtDur(h.duration)}</td>
-                  <td className="line-clamp-1 py-1.5 pr-2">{h.media.title}</td>
-                  <td className="py-1.5 pr-2 text-right">
-                    {h.result === "success" && <Badge tone="green">ok</Badge>}
-                    {h.result === "playing" && <Badge tone="signal">no ar</Badge>}
-                    {h.result === "error" && <Badge tone="red">erro</Badge>}
-                    {h.result === "stopped" && <Badge>parado</Badge>}
-                    {h.result === "fallback" && <Badge tone="muted">fallback</Badge>}
-                  </td>
-                  <td className="py-1.5 text-right font-mono text-xs text-muted">
-                    {new Date(h.startedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <Spinner />
-        )}
+        <RecentHistory />
       </Card>
 
-      {/* controles avançados */}
+      {/* diagnóstico */}
       <Card>
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Diagnóstico</div>
         <dl className="space-y-1.5 text-sm">
@@ -199,8 +196,39 @@ export default function NoAr() {
             <dd className="font-mono">{cur?.pid ?? "—"}</dd>
           </div>
         </dl>
-        <ErrorMsg error={start.error ?? stop.error} />
       </Card>
     </div>
+  );
+}
+
+function RecentHistory() {
+  const { data: history } = useQuery({
+    queryKey: ["history"],
+    queryFn: () => api.get<HistoryRow[]>("/playout/history?take=8"),
+    refetchInterval: 10000,
+  });
+  if (!history) return <Spinner />;
+  return (
+    <table className="w-full text-sm">
+      <tbody>
+        {history.map((h) => (
+          <tr key={h.id} className="border-t border-muted/10">
+            <td className="py-1.5 pr-2 font-mono text-xs text-muted">{fmtDur(h.duration)}</td>
+            <td className="line-clamp-1 py-1.5 pr-2">{h.media.title}</td>
+            <td className="py-1.5 pr-2 text-right">
+              {h.result === "success" && <Badge tone="green">ok</Badge>}
+              {h.result === "playing" && <Badge tone="signal">no ar</Badge>}
+              {h.result === "error" && <Badge tone="red">erro</Badge>}
+              {h.result === "stopped" && <Badge>parado</Badge>}
+              {h.result === "skipped" && <Badge tone="signal">pulou</Badge>}
+              {h.result === "fallback" && <Badge>fallback</Badge>}
+            </td>
+            <td className="py-1.5 text-right font-mono text-xs text-muted">
+              {new Date(h.startedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }

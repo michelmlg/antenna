@@ -117,6 +117,22 @@ export const scheduleCreateSchema = z.object({
 export const playNowSchema = z.object({ mediaId: z.string().uuid() });
 export const fallbackSchema = z.object({ mediaId: z.string().uuid().nullable() });
 
+/** Item da fila persistida (gerada uma vez, consumida em ordem). */
+export const queueItemSchema = z.object({
+  mediaId: z.string(),
+  title: z.string(),
+  url: z.string(),
+  source: z.string(),
+  duration: z.number(),
+  resolvedId: z.string().nullable(),
+  channelTitle: z.string().nullable(),
+  thumbnailUrl: z.string().nullable(),
+  genre: z
+    .object({ name: z.string(), color: z.string(), icon: z.string() })
+    .nullable(),
+});
+export type QueueItem = z.infer<typeof queueItemSchema>;
+
 /** Payload que o worker publica em PlayoutState (id=1) a cada tick. */
 export const playoutStatePayloadSchema = z.object({
   running: z.boolean(),
@@ -137,6 +153,7 @@ export const playoutStatePayloadSchema = z.object({
     })
     .nullable(),
   next: z.object({ title: z.string(), program: z.string().nullable() }).nullable(),
+  queue: z.array(queueItemSchema).default([]),
   errors: z.number(),
   restarts: z.number(),
   lastError: z.string().nullable(),

@@ -53,6 +53,11 @@ app.post("/cmd/play-now", auth, wrap(async (req, res) => {
   res.json(playout.getState());
 }));
 
+app.post("/cmd/next", auth, wrap(async (_req, res) => {
+  await playout.skipNext();
+  res.json(playout.getState());
+}));
+
 app.post("/cmd/fallback", auth, wrap(async (req, res) => {
   const mediaId = req.body?.mediaId == null ? null : String(req.body.mediaId);
   await playout.setFallback(mediaId);
@@ -60,9 +65,8 @@ app.post("/cmd/fallback", auth, wrap(async (req, res) => {
   res.json({ ok: true, fallbackMediaId: mediaId });
 }));
 
-app.get("/queue", wrap(async (req, res) => {
-  const count = Number(req.query.count) || 5;
-  res.json(await playout.planQueue(count));
+app.get("/queue", wrap(async (_req, res) => {
+  res.json(await playout.planQueue());
 }));
 
 // --- operações que precisam de yt-dlp/ffprobe (mora só aqui) ---
