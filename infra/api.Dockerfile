@@ -2,7 +2,9 @@
 FROM node:22-bookworm-slim
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/database/package.json packages/database/
 COPY packages/shared/package.json packages/shared/
 COPY packages/core/package.json packages/core/

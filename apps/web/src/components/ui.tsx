@@ -87,6 +87,7 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 export function ErrorMsg({ error }: { error: unknown }) {
+  if (!error) return null;
   return <div className="rounded border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-400">{String(error instanceof Error ? error.message : error)}</div>;
 }
 

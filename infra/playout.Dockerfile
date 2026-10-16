@@ -4,7 +4,7 @@ WORKDIR /app
 
 ARG YTDLP_VERSION=latest
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates unzip \
+    && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates unzip openssl \
     && rm -rf /var/lib/apt/lists/* \
     && (curl -fsSL -o /usr/local/bin/yt-dlp \
         "https://github.com/yt-dlp/yt-dlp/releases/${YTDLP_VERSION}/download/yt-dlp_linux" \
@@ -13,7 +13,7 @@ RUN apt-get update \
         || echo "AVISO: deno não instalado") \
     && mkdir -p /root/.config/yt-dlp && printf -- "--no-playlist\n" > /root/.config/yt-dlp/config
 
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/database/package.json packages/database/
 COPY packages/shared/package.json packages/shared/
 COPY packages/core/package.json packages/core/
