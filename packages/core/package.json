@@ -1,0 +1,10 @@
+{
+  "name": "@antenna/core",
+  "version": "2.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "dependencies": {
+    "@antenna/database": "*",
+    "@antenna/shared": "*"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@antenna/playout",
+  "version": "2.0.0",
+  "private": true,
+  "dependencies": {
+    "@antenna/core": "*",
+    "@antenna/database": "*",
+    "@antenna/shared": "*",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  }
+}

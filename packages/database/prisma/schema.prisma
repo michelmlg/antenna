@@ -1,0 +1,182 @@
+// Antenna — schema do banco (SQLite via Prisma).
+// Herda o modelo validado do v1 (Tv-local), com limpezas:
+//   - Playlist -> Genre, PlaylistItem -> GenreItem (nomes de domínio)
+//   - Rule/_ProgramToRule removidos (legado sem uso)
+//   - Media.thumbnailUrl (sync do yt-dlp traz de graça; alimenta os cards)
+//   - PlayoutState: linha única publicada pelo worker a cada tick
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  color     String   @default("#3b82f6")
+  createdAt DateTime @default(now())
+  medias    Media[]
+}
+
+model Media {
+  id            String     @id @default(uuid())
+  title         String
+  description   String     @default("")
+  url           String
+  duration      Int        @default(0)
+  source        String     @default("local") // local | youtube | http | fallback
+  status        String     @default("ativo") // ativo | inativo
+  // --- proveniência YouTube ---
+  originSourceId String?
+  originSource   Source?  @relation(fields: [originSourceId], references: [id], onDelete: SetNull)
+  resolvedId     String? // id do YouTube — dedupe por fonte/gênero
+  channelTitle   String   @default("")
+  views          Int?
+  uploadDate     DateTime?
+  thumbnailUrl   String?
+  createdAt      DateTime @default(now())
+  categories     Category[]
+  items          GenreItem[]
+  history        PlaybackHistory[]
+
+  @@index([resolvedId])
+}
+
+// Gênero de conteúdo: fontes (links, canais, buscas) + mistura de composição.
+model Genre {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  description      String   @default("")
+  color            String   @default("#38bdf8")
+  icon             String   @default("🎭")
+  antiRepeatWindow Int      @default(20) // últimos N exibidos que não repetem
+  orderingPadrao   String   @default("menos_reproduzidos") // aleatoria | menos_reproduzidos | mais_antigos | definida
+  status           String   @default("ativo") // ativo | pausado
+  createdAt        DateTime @default(now())
+
+  items       GenreItem[]
+  program     Program?
+  sources     Source[]
+  ingredients MixIngredient[]
+}
+
+// Link manual (curadoria direta) dentro de um gênero.
+model GenreItem {
+  id      String @id @default(uuid())
+  order   Int    @default(0)
+  genreId String
+  mediaId String
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([genreId, mediaId])
+}
+
+// Fonte de conteúdo de um gênero.
+// type: video (link direto), channel, search, channelSearch
+model Source {
+  id            String    @id @default(uuid())
+  genreId       String
+  genre         Genre     @relation(fields: [genreId], references: [id], onDelete: Cascade)
+  type          String
+  url           String    @default("")
+  query         String    @default("")
+  limit         Int       @default(12) // máx. de vídeos novos por sync
+  status        String    @default("ativo") // ativo | pausado
+  lastSyncAt    DateTime?
+  lastSyncCount Int       @default(0)
+  lastError     String    @default("")
+  filters       String? // JSON (packages/core/filters)
+  sort          String    @default("recent") // recent | oldest (canal: varre e pega a cauda)
+  createdAt     DateTime  @default(now())
+
+  medias Media[]
+  runs   SyncRun[]
+  ingredients MixIngredient[]
+
+  @@index([genreId])
+}
+
+// Log de sincronizações de uma fonte.
+model SyncRun {
+  id         String    @id @default(uuid())
+  sourceId   String
+  source     Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  startedAt  DateTime
+  finishedAt DateTime?
+  added      Int       @default(0)
+  errors     Int       @default(0)
+  message    String    @default("")
+
+  @@index([sourceId])
+}
+
+// Ingrediente da mistura (a "regra viva" de composição).
+// scope: links | source | genre | category
+model MixIngredient {
+  id           String  @id @default(uuid())
+  genreId      String
+  genre        Genre   @relation(fields: [genreId], references: [id], onDelete: Cascade)
+  scope        String
+  sourceId     String?
+  source       Source? @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  categoryName String?
+  count        Int     @default(1)
+  order        Int     @default(0)
+
+  @@index([genreId])
+}
+
+model Program {
+  id             String   @id @default(uuid())
+  name           String
+  description    String   @default("")
+  targetDuration Int      @default(0)
+  openUrl        String?
+  closeUrl       String?
+  status         String   @default("active")
+  mixOverride    String? // JSON opcional: mistura diferente para este bloco
+  createdAt      DateTime @default(now())
+  genreId        String?  @unique // 1:1 com o gênero (auto-programa da grade)
+  genre          Genre?   @relation(fields: [genreId], references: [id], onDelete: SetNull)
+  schedule       ProgramSchedule[]
+}
+
+model ProgramSchedule {
+  id        String  @id @default(uuid())
+  programId String
+  program   Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  dayOfWeek Int // 0 = domingo
+  startTime String // "HH:MM"
+  endTime   String // "HH:MM"
+
+  @@unique([programId, dayOfWeek, startTime])
+}
+
+model PlaybackHistory {
+  id         String    @id @default(uuid())
+  mediaId    String
+  media      Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  programId  String?
+  channel    String    @default("antenna")
+  startedAt  DateTime
+  finishedAt DateTime?
+  duration   Int       @default(0)
+  result     String    @default("playing")
+
+  @@index([startedAt])
+}
+
+// Linha única (id=1) que o worker de playout republica a cada tick.
+// payload = JSON com o estado completo (no ar, próximo, pid, erros...).
+model PlayoutState {
+  id        Int      @id @default(1)
+  payload   String   @default("{}")
+  updatedAt DateTime @default(now())
+
+  @@map("playout_state")
+}

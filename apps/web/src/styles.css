@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-background text-foreground;
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  @apply bg-surface rounded;
+}
+*::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+
+input,
+select,
+textarea {
+  @apply bg-background border border-muted/30 rounded px-2 py-1.5 text-sm text-foreground outline-none focus:border-signal;
+}
+
+button {
+  cursor: pointer;
+}

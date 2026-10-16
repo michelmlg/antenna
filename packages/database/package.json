@@ -1,0 +1,15 @@
+{
+  "name": "@antenna/database",
+  "version": "2.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "migrate:v1": "tsx src/migrate-from-v1.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  }
+}

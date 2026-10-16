@@ -1,0 +1,19 @@
+# dependências
+node_modules/
+
+# builds
+apps/web/dist/
+*.tsbuildinfo
+
+# dados locais (banco nunca vai pro git)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# ambiente
+.env
+.env.local
+
+# logs e temporários
+*.log
+.cache/

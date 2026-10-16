@@ -1,0 +1,34 @@
+# MediaMTX — config mínima do Antenna (reaproveitada do v1)
+logLevel: info
+
+# API de controle (espectadores em tempo real p/ o painel)
+api: true
+apiAddress: :9997
+apiAllowOrigins: ["*"]
+
+# LAN aberta: o backend chama de outro container
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+      - action: read
+      - action: playback
+      - action: api
+
+rtsp: yes
+rtspAddress: :8554
+
+hls: yes
+hlsAddress: :8080
+hlsAllowOrigins: ["*"]
+# variante clássica (MPEG-TS): compatibilidade máxima com hls.js
+hlsVariant: mpegts
+
+rtmp: yes
+rtmpAddress: :1935
+
+paths:
+  # canal principal — o FFmpeg do worker publica aqui
+  antenna:
