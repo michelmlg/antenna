@@ -71,8 +71,8 @@ export const sourceUpdateSchema = z.object({
 // ---------- mistura ----------
 export const mixIngredientSchema = z.object({
   scope: mixScopeSchema,
-  sourceId: z.string().uuid().optional(),
-  categoryName: z.string().max(80).optional(),
+  sourceId: z.string().uuid().nullable().optional(),
+  categoryName: z.string().max(80).nullable().optional(),
   count: z.number().int().min(1).max(10),
 });
 export const mixUpdateSchema = z.object({ ingredients: z.array(mixIngredientSchema).min(1).max(8) });
