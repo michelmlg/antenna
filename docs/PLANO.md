@@ -536,3 +536,68 @@ Riscos: mudanças na biblioteca reusam o fluxo de drag existente (mesma
 matemática de drop dnd-kit); o playout não muda em nenhuma fase — fila
 estável preserva o vídeo corrente e tudo vale a partir do próximo tick.
 Rebuild obrigatório api → web na F4 (worker/playout intocados).
+
+## 18. v3.2 — Grade: correção do DnD + layout/responsividade
+
+> **STATUS: implementado e verificado (17/10/2026).** Base versionada:
+> tag `pre-grade-v3.2` (2 commits: fix DnD → feat layout).
+
+### 18.0 Bug do DnD (prioridade) — 2 causas, umastructural
+
+1. **`<DndContext>` envolvia só a Card da timeline** — a `LibraryPanel`
+   (com os `useDraggable`) ficava FORA do contexto: o arraste nunca
+   ativava (fantasma/preview/criação jamais aconteciam). Fix: contexto
+   envolve biblioteca + timeline. Esse era o "arraste não funciona" do
+   usuário — não era tuning do sensor.
+2. **Prévia derivava de `ev.delta` (pós-modifier)** — com o modifier que
+   centraliza o overlay no cursor, `ev.delta` NÃO é o deslocamento bruto
+   do ponteiro: recomputar o ponteiro com ele produzia exatamente o
+   deslocamento "à direita do cursor" que o usuário reportava. Fix:
+   **ponteiro bruto rastreado por listener `pointermove` (capture, no
+   document) instalado no `onDragStart`** e removido em end/cancel;
+   `libPreview` lê esse valor. Geometry: `pointerMin =
+   (pointerX − trackLeft() Rect) / px`, bloco de 1h centrado no cursor,
+   snap 5 min, clamp 0–1440; `ev.over` resolve o lane.
+
+### 18.1 Layout (desktop/tablet)
+
+- Barra superior agrupada: status · grupos (⟲⟳) (⊖ zoom ⊕) · ir p/ dia · + Programar.
+- Biblioteca: recolhível + **largura ajustável pela borda direita**
+  (150–360px, persistida em `localStorage["grade-lib-w"]`, listeners de
+  document — pointer capture falha com CDP).
+- **Painel de propriedades** (novo `PropertiesPanel.tsx`): selecionar
+  bloco → dia (botões), início/fim (inputs time), duração, Duplicar/Excluir;
+  PATCH automático (rollback + msg de conflito inline). Duplo-clique agora
+  só seleciona (o painel é o editor; o modal ficou para CRIAR).
+- Blocos: gradiente sobre a cor do gênero (uniformiza), contorno
+  **tracejado = PATCH em andamento**, anel = selecionado, ghost vermelho =
+  conflito. Ticks de meia-hora quando zoom ≥ 1.5 px/min.
+- Undo/redo e atalhos (N/D/Del/Ctrl+Z/Y) preservados.
+
+### 18.2 Responsividade
+
+- Desktop ≥768px: como acima (timeline com scroll horizontal por zoom).
+- Celular <768px: **`GradeMobile.tsx`** — chips de dia + agenda do dia com
+  campos de horário (type=time) + excluir + "Novo bloco" (modal); sem drag.
+
+### 18.3 Verificação (Chrome real via CDP `Input.dispatchMouseEvent`)
+
+| Teste | Resultado |
+|---|---|
+| Drag biblioteca → minuto 800 (13:20) | bloco criado **Dom 12:50–13:50** (snap exato) ✓ |
+| Mover bloco (corpo) | PATCH persistiu ✓ |
+| Editar pelo painel (Fim 05:00→05:30) | API 04:00–05:30 + "duração: 1h30" ✓ |
+| Alça da biblioteca | largura persistida (`ls=293`) ✓ |
+| 1500×900 / 1024×768 / 390×844 | timeline / tablet / agenda mobile ✓ |
+| DB | sempre restaurado (12 blocos antes = depois) ✓ |
+
+> Nota de método: `npx chrome-devtools-mcp` `drag` usa HTML5 DnD (dnd-kit
+> ignora); eventos sintetizados via `dispatchEvent` falham por
+> `button = -1` default e React-async. O que funcionou: **Chrome próprio
+> com `--remote-debugging-port` + `Input.dispatchMouseEvent`** (eventos
+> confiáveis, passos discretos com sleeps) — ver skill repo-restructure.
+
+### 18.4 Pendente
+
+Validação visual do usuário: afinação do gesto (arrastar da biblioteca,
+mover, alças), largura da biblioteca. Ajustes de gosto no painel.
