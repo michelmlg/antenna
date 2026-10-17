@@ -10,6 +10,7 @@ interface Props {
   row: ScheduleRow;
   px: number;
   selected: boolean;
+  pending: boolean;
   onAir: boolean;
   onPick(e: React.PointerEvent, row: ScheduleRow, mode: ResizeMode): void;
   onOpen(row: ScheduleRow): void; // duplo-clique
@@ -19,7 +20,7 @@ interface Props {
 
 const CANVAS = "#00000055";
 
-export function ScheduleBlock({ row, px, selected, onAir, onPick, onOpen, onPickUp, onPickMove }: Props) {
+export function ScheduleBlock({ row, px, selected, pending, onAir, onPick, onOpen, onPickUp, onPickMove }: Props) {
   const start = toMin(row.startTime);
   const end = toMin(row.endTime);
   const width = Math.max(6, (end - start) * px - 2);
@@ -33,13 +34,12 @@ export function ScheduleBlock({ row, px, selected, onAir, onPick, onOpen, onPick
     top: 5,
     width,
     height: 54,
-    background: color,
+    background: `linear-gradient(180deg, rgba(255,255,255,0.16), rgba(0,0,0,0.10)), ${color}`,
     boxShadow: selected
-      ? "0 0 0 2px var(--tw-ring-color), 0 4px 10px #0007"
+      ? "0 0 0 2.5px #ffffffdd, 0 4px 10px #0007"
       : `0 0 0 1px ${CANVAS}, 0 2px 6px #0006`,
-    // seleção: anel claro
-    ...(selected ? { boxShadow: `0 0 0 2.5px #ffffffdd, 0 4px 10px #0007` } : {}),
     cursor: narrow ? "grab" : undefined,
+    ...(pending ? { outline: "2px dashed #ffffffcc", outlineOffset: 2 } : {}),
   } as React.CSSProperties;
 
   return (

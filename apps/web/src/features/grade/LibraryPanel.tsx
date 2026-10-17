@@ -1,5 +1,6 @@
-/** Biblioteca lateral: gêneros (GET /genres), pesquisa. Arrastar cria o bloco (o backend cria/reaproveita o auto-programa). */
+/** Biblioteca lateral: gêneros (GET /genres), pesquisa, LARGURA AJUSTÁVEL. Arrastar cria o bloco. */
 import { useMemo, useState } from "react";
+
 import { useDraggable } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
@@ -7,6 +8,10 @@ import { api, type GenreRow, type ScheduleRow } from "../../lib/api";
 import { GenreIcon } from "../../lib/icons";
 import { Badge, Button, Empty, Spinner } from "../../components/ui";
 import { hasOverlap, snapMinutes, toMin } from "@antenna/core/schedule";
+
+const LIB_W_KEY = "grade-lib-w";
+const LIB_MIN = 150;
+const LIB_MAX = 360;
 
 /** Próxima janela livre do dia para soltar um bloco (procura do "start" em diante). */
 export function firstFreeSlot(
@@ -42,6 +47,10 @@ interface Props {
 
 export function LibraryPanel({ open, onToggle, onNewBlock }: Props) {
   const [search, setSearch] = useState("");
+  const [width, setWidth] = useState(() => {
+    const v = parseInt(localStorage.getItem(LIB_W_KEY) || "", 10);
+    return Number.isFinite(v) ? Math.min(LIB_MAX, Math.max(LIB_MIN, v)) : 208;
+  });
   const { data: genres } = useQuery({ queryKey: ["genres"], queryFn: () => api.get<GenreRow[]>("/genres") });
 
   const filtered = useMemo(() => {
@@ -49,7 +58,35 @@ export function LibraryPanel({ open, onToggle, onNewBlock }: Props) {
   }, [genres, search]);
 
   return (
-    <aside className={`flex shrink-0 flex-col ${open ? "w-52" : "w-9"} rounded-lg border border-muted/10 bg-card transition-all`}>
+    <aside
+      className={`relative flex shrink-0 flex-col rounded-lg border border-muted/10 bg-card transition-colors`}
+      style={{ width: open ? width : 36 }}
+    >
+      {/* alça de redimensionamento (borda direita) */}
+      {open && (
+        <div
+          className="absolute inset-y-0 right-0 z-10 w-1.5 cursor-ew-resize hover:bg-signal/40"
+          title="Arraste para ajustar a largura"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            const parent = (e.currentTarget as HTMLElement).parentElement;
+            if (!parent) return;
+            const onMove = (ev: PointerEvent) => {
+              setWidth(Math.min(LIB_MAX, Math.max(LIB_MIN, ev.clientX - parent.getBoundingClientRect().left)));
+            };
+            const onUp = () => {
+              document.removeEventListener("pointermove", onMove, true);
+              document.removeEventListener("pointerup", onUp, true);
+              setWidth((w) => {
+                localStorage.setItem(LIB_W_KEY, String(w));
+                return w;
+              });
+            };
+            document.addEventListener("pointermove", onMove, true);
+            document.addEventListener("pointerup", onUp, true);
+          }}
+        />
+      )}
       <div className="flex items-center justify-between p-1.5">
         {open && <span className="px-1 text-[11px] font-bold uppercase tracking-wide text-muted">Biblioteca</span>}
         <Button size="sm" variant="ghost" onClick={onToggle} title={open ? "Recolher" : "Expandir biblioteca"}>

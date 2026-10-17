@@ -22,6 +22,7 @@ interface Props {
   nowMin: number | null; // null → linha "agora" fora
   onAirProgramId: string | null;
   selectedId: string | null;
+  pendingIds: Set<string>;
   preview: Preview | null;
   hourPx: number;
   registerTrack: (dow: number, el: HTMLDivElement | null) => void;
@@ -40,6 +41,7 @@ export function DayLane({
   nowMin,
   onAirProgramId,
   selectedId,
+  pendingIds,
   preview,
   hourPx,
   registerTrack,
@@ -54,7 +56,9 @@ export function DayLane({
     width: 1440 * px,
     height: LANE_H,
     backgroundImage:
-      "repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0 1px, transparent 1px var(--hour-px))",
+      px >= 1.5
+        ? "repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0 1px, transparent 1px var(--hour-px)), repeating-linear-gradient(to right, rgba(255,255,255,0.025) 0 1px, transparent 1px calc(var(--hour-px) / 2))"
+        : "repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0 1px, transparent 1px var(--hour-px))",
     ["--hour-px" as string]: `${hourPx}px`,
   };
 
@@ -86,6 +90,7 @@ export function DayLane({
             row={r}
             px={px}
             selected={selectedId === r.id}
+            pending={pendingIds.has(r.id)}
             onAir={!!onAirProgramId && onAirProgramId === r.program.id}
             onPick={onPick}
             onPickUp={onPickUp}

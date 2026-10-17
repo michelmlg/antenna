@@ -13,6 +13,19 @@ import { useGradeSchedule, type SchedulePatch } from "./useScheduleMutations";
 import { DayLane, type Preview } from "./DayLane";
 import { LibraryPanel, firstFreeSlot } from "./LibraryPanel";
 import { BlockModal, type ModalState } from "./BlockModal";
+import { PropertiesPanel } from "./PropertiesPanel";
+import GradeMobile from "./GradeMobile";
+
+function useIsMobile(): boolean {
+  const [m, setM] = useState(() => window.matchMedia("(max-width: 767px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const h = (e: MediaQueryListEvent) => setM(e.matches);
+    mq.addEventListener("change", h);
+    return () => mq.removeEventListener("change", h);
+  }, []);
+  return m;
+}
 
 interface DragState {
   id: string;
@@ -47,6 +60,25 @@ const centerOnCursor: Modifier = ({ draggingNodeRect, transform, activatorEvent 
 export default function Grade() {
   const sched = useGradeSchedule();
   const { rows, updateBlock, addBlock, deleteBlock } = sched;
+  const isMobile = useIsMobile();
+
+  // blocos com PATCH em andamento (contorno tracejado = alteração não salva ainda)
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const updateTracked = useCallback(
+    async (id: string, patch: SchedulePatch): Promise<boolean> => {
+      setPendingIds((prev) => new Set(prev).add(id));
+      try {
+        return await updateBlock(id, patch);
+      } finally {
+        setPendingIds((prev) => {
+          const n = new Set(prev);
+          n.delete(id);
+          return n;
+        });
+      }
+    },
+    [updateBlock]
+  );
 
   const { data: playout } = useQuery({
     queryKey: ["playout"],
@@ -176,9 +208,9 @@ export default function Grade() {
       if (!d.moved || !p) return; // clique simples = só seleção
       const changed = p.dow !== d.dow || p.start !== d.startMin || p.end !== d.endMin;
       if (!p.valid || !changed) return; // inválido → volta ao lugar (sem salvar)
-      void updateBlock(d.id, { dayOfWeek: p.dow, startTime: minutesToHHMM(p.start), endTime: minutesToHHMM(p.end) });
+      void updateTracked(d.id, { dayOfWeek: p.dow, startTime: minutesToHHMM(p.start), endTime: minutesToHHMM(p.end) });
     },
-    [updateBlock]
+    [updateTracked]
   );
 
   // ---- dnd-kit: biblioteca → timeline ----
@@ -341,66 +373,49 @@ export default function Grade() {
       <Badge tone="muted">sem alterações</Badge>
     );
 
+  if (isMobile) return <GradeMobile />;
+
   return (
     <div className="flex flex-col">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold">Grade de Programação</h1>
-          <p className="text-sm text-muted">Arraste blocos entre dias e horários; alças nas bordas redimensionam. Fora dos blocos: seleção automática.</p>
+          <p className="text-xs text-muted">
+            arraste da biblioteca · corpo = mover · bordas = redimensionar · clique = propriedades · fora dos blocos: seleção automática
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {pill}
-          <Button size="sm" variant="ghost" title="Desfazer (Ctrl+Z)" onClick={() => void sched.undo()} disabled={sched.saving}>
-            ⟲
-          </Button>
-          <Button size="sm" variant="ghost" title="Refazer (Ctrl+Y)" onClick={() => void sched.redo()} disabled={sched.saving}>
-            ⟳
-          </Button>
-          <span className="mx-1 h-5 w-px bg-muted/20" />
-          <Button size="sm" variant="default" title="Menos zoom" onClick={zoomOut}>
-            ⊖
-          </Button>
-          <Button size="sm" variant="default" title="Mais zoom" onClick={zoomIn}>
-            ⊕
-          </Button>
-          <select value={String(zoom)} onChange={(e) => setZoom(e.target.value === "auto" ? "auto" : Number(e.target.value))} className="rounded border border-muted/20 bg-surface px-1 py-1 text-xs" title="Zoom">
-            <option value="auto">auto</option>
-            {ZOOM_STEPS.map((z) => (
-              <option key={z} value={z}>{String(z)}</option>
-            ))}
-          </select>
-          <select onChange={(e) => e.target.value && gotoDay(e.target.value)} className="rounded border border-muted/20 bg-surface px-1 py-1 text-xs" defaultValue="" title="Ir para o dia">
+          <div className="flex items-center gap-0.5 rounded-lg border border-muted/10 bg-surface px-1 py-0.5" title="Desfazer (Ctrl+Z) / Refazer (Ctrl+Y)">
+            <Button size="sm" variant="ghost" onClick={() => void sched.undo()} disabled={sched.saving}>
+              ⟲
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => void sched.redo()} disabled={sched.saving}>
+              ⟳
+            </Button>
+          </div>
+          <div className="flex items-center gap-0.5 rounded-lg border border-muted/10 bg-surface px-1 py-0.5" title="Zoom da timeline">
+            <Button size="sm" variant="ghost" onClick={zoomOut} title="Menos zoom">
+              ⊖
+            </Button>
+            <select value={String(zoom)} onChange={(e) => setZoom(e.target.value === "auto" ? "auto" : Number(e.target.value))} className="border-0 bg-transparent text-xs" title="Zoom">
+              <option value="auto">auto</option>
+              {ZOOM_STEPS.map((z) => (
+                <option key={z} value={z}>{String(z)}</option>
+              ))}
+            </select>
+            <Button size="sm" variant="ghost" onClick={zoomIn} title="Mais zoom">
+              ⊕
+            </Button>
+          </div>
+          <select onChange={(e) => e.target.value && gotoDay(e.target.value)} className="rounded-lg border border-muted/10 bg-surface px-2 py-1.5 text-xs" defaultValue="" title="Ir para o dia">
             <option value="">ir p/ dia…</option>
             {laneNames.map((n, i) => (
               <option key={i} value={i}>{n}</option>
             ))}
           </select>
-          {selected && (
-            <div className="flex items-center gap-1.5 rounded border border-signal/40 bg-signal/10 px-2 py-1">
-              <span className="max-w-40 truncate text-xs font-medium">{selected.program.name}</span>
-              <Button size="sm" variant="ghost" onClick={() => setModal({ mode: "edit", row: selected })} title="Editar (duplo-clique)">
-                ✎
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => duplicate(selected)} title="Duplicar (D)">
-                ⧉
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                title="Excluir (Del)"
-                onClick={() => {
-                  if (selected && window.confirm(`Remover o bloco "${selected.program.name}"?`)) {
-                    void deleteBlock(selected);
-                    setSelId(null);
-                  }
-                }}
-              >
-                <span className="text-red-400">✕</span>
-              </Button>
-            </div>
-          )}
           <Button variant="signal" onClick={() => setModal({ mode: "create", dow: now.dow })}>
-            + Programar bloco
+            + Programar
           </Button>
         </div>
       </div>
@@ -409,7 +424,7 @@ export default function Grade() {
         <Spinner />
       ) : (
         <DndContext sensors={sensors} modifiers={[centerOnCursor]} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
-          <div className="flex gap-3">
+          <div className="flex items-start gap-3">
             <LibraryPanel open={libOpen} onToggle={() => setLibOpen((v) => !v)} onNewBlock={() => setModal({ mode: "create" })} />
             <Card className="min-w-0 flex-1 p-0">
               <div ref={scrollerRef} className="overflow-y-auto overflow-x-auto rounded-lg" style={{ height: "calc(100vh - 190px)", minHeight: 340 }}>
@@ -439,12 +454,13 @@ export default function Grade() {
                       nowMin={dow === now.dow ? now.min : null}
                       onAirProgramId={onAirProgramId}
                       selectedId={selId}
+                      pendingIds={pendingIds}
                       preview={preview}
                       registerTrack={registerTrack}
                       onPick={onPick}
                       onPickMove={onPickMove}
                       onPickUp={onPickUp}
-                      onOpen={(row) => setModal({ mode: "edit", row })}
+                      onOpen={(row) => setSelId(row.id)}
                     />
                   ))}
                 </div>
@@ -453,6 +469,18 @@ export default function Grade() {
               duplo-clique = editar · arrastar = mover · bordas = redimensionar · <kbd>N</kbd> novo · <kbd>D</kbd> duplicar · <kbd>Del</kbd> excluir · <kbd>Ctrl+Z</kbd>/<kbd>Ctrl+Y</kbd>
             </div>
           </Card>
+          {selected && (
+            <PropertiesPanel
+              row={selected}
+              onEdit={updateTracked}
+              onDuplicate={duplicate}
+              onDelete={(row) => {
+                void deleteBlock(row);
+                setSelId(null);
+              }}
+              onClose={() => setSelId(null)}
+            />
+          )}
           </div>
           <DragOverlay dropAnimation={null}>
             {libActive ? (
