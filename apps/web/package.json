@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@antenna/core": "^2.0.0",
     "@antenna/shared": "*",
+    "@dnd-kit/core": "^6.3.1",
     "@tanstack/react-query": "^5.62.7",
     "hls.js": "^1.5.17",
     "lucide-react": "^0.468.0",

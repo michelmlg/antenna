@@ -171,17 +171,6 @@ export interface SyncRunRow {
   };
 }
 
-export interface ProgramRow {
-  id: string;
-  name: string;
-  description: string;
-  status: string;
-  targetDuration: number;
-  mixOverride: string | null;
-  genre: { id: string; name: string; color: string; icon: string } | null;
-  _count?: { schedule: number };
-}
-
 export interface StreamInfo {
   channel: string;
   hlsPath: string;

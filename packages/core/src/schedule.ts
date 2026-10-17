@@ -15,6 +15,39 @@ function toMinutes(hhmmStr: string): number {
   return (h || 0) * 60 + (m || 0);
 }
 
+/** Minutos do dia → "HH:MM" (blocos não cruzam meia-noite; 24:00 = fim do dia). */
+export function minutesToHHMM(min: number): string {
+  const m = Math.min(1440, Math.max(0, Math.round(min)));
+  const h = Math.floor(m / 60);
+  return `${String(h).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+export const toMin = toMinutes;
+export const MIN_DURATION = 5; // duração mínima de bloco (min), igual ao snap
+export const snapMinutes = (min: number, step = MIN_DURATION): number =>
+  Math.round(min / step) * step;
+
+interface BlockishId extends Blockish {
+  id?: string;
+}
+
+/** Sobreposição real de intervalos no MESMO dia (borda encostada não é conflito). */
+export function hasOverlap<T extends BlockishId>(
+  rows: T[],
+  day: number,
+  start: number,
+  end: number,
+  excludeId?: string
+): boolean {
+  return rows.some((r) => {
+    if (r.id && excludeId && r.id === excludeId) return false;
+    if (r.dayOfWeek !== day) return false;
+    const s = toMinutes(r.startTime);
+    const e = toMinutes(r.endTime);
+    return start < e && s < end;
+  });
+}
+
 interface Blockish {
   dayOfWeek: number;
   startTime: string;

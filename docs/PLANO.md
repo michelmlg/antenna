@@ -275,3 +275,264 @@ ffmpeg é classificado (avisos do decodificador, como "Late SEI", não viram las
   uma faixa compacta editável no cabeçalho — sai do lugar de "form solto".
 - Fonte em cima (form) → lista de fontes embaixo, cada uma com o CRUD de vídeos
   dentro do bloco (grid de thumbs, filtrável ativo/inativo).
+
+## 16. v3.0 — Grade: timeline de edição (drag & drop + resize)
+
+> **STATUS: implementado e em produção (16/10/2026).** Verificado: 33 testes do
+> core ✓, typecheck ✓, build web ✓, smoke de API (POST 201 / PATCH 200 / conflito
+> 409 / inverso e <5min 400 / duplicado 409) ✓, drag+resize+undo/redo exercitados
+> no navegador ✓, estado do DB restaurado ao original (12 blocos). Pendente de
+> validação visual do usuário: gesto de arrastar da biblioteca (dnd-kit) — o
+> caminho de código existe e a matemática é a mesma do drag de blocos, mas o
+> sandbox headless não consegue simular dnd-kit.
+
+Substitui os 7 cards independentes de `grade.tsx` por uma timeline de edição.
+Objetivo: gerenciar a grade sem formulário — arrastar blocos, redimensionar pelas
+alças, ver conflitos na hora, persistir no mesmo backend/models.
+
+### 16.0 Decisões (clarify, 16/10/2026 — contrato de implementação)
+
+| # | Decisão | Escolha |
+|---|---------|---------|
+| D1 | Geometria | **7 linhas horizontais (A)** — uma trilha por dia Dom→Sáb, régua de horas compartilhada no topo; arrastar na vertical muda o dia |
+| D2 | Drag & drop | **dnd-kit** (nova dependência) — facilita arrastar da biblioteca; resize continua com pointer events próprios (dnd-kit como wrapper mínimo) |
+| D3 | Blocos sobrepostos | **Bloquear salvamento** — região em vermelho + explicação objetiva; a grade nunca fica inexequível |
+| D4 | Regra de encaixe | **Blocos independentes, lacunas permitidas** — é o modelo atual; fora dos blocos roda seleção automática |
+| D5 | Backend | **PATCH `/schedule/:id` aditivo** — sem mudar modelos; validação continua via Zod no shared + checagem de conflito server-side |
+
+### 16.1 Wireframe aprovado (layout A)
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ Grade de Programação      ⊖ Zoom ⊕  [Auto]  [Dia ▾]      ⟲ ⟳   ● pendente / ✓ salvo │
+├──────────┬────────────────────────────────────────────────────────────────────────┤
+│ BIBLIO.  │ régua:  00 02 04 06 08 10 12 14 16 18 20 22 24 (sticky, tick 30 min)    │
+│ (▸sel.)  │ ┌────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴─────────┐  │
+│ 🔍 buscar│ │DOM │        ▓▓▓Música▓▓░│          ░░Retrô░         │               │  │
+│ ▾ gênero │ │    │    09–11 · 2h      │          14–17 · 3h       │               │  │
+│ ▾ origem │ ├────┼────────────────────┼───────────────────────────┼───────────────┤  │
+│ ┌──────┐ │ │SEG │  ▼ linha "agora"   │▒▒▒Jornal▒▒▒               │░░░░ (auto)    │  │
+│ │Música│ │ │    │    08–13 · 5h      │                           │               │  │
+│ │1h    │ │ ├────┴────────────┬───────┴───────────────────────────┴───┴───────────┤  │
+│ └──────┘ │ │TER │            │  ← divisão entre dias visível, régua contínua     │  │
+│ (arrasta)│ └────────────────────────────────────────────────────────────────────┘  │
+└──────────┴──────────────────────────────────────────────────────────────────────────┘
+   bloco:  ┌─Música 09–11─┐  ← alça esquerda e direita (6px, cursor ew-resize)
+           seleção: borda + ações contextual (editar, duplicar, excluir)
+           duplo-clique → modal de edição; lacunas mostram "livre (auto)"
+```
+
+Leitura do wireframe: cada dia é uma trilha horizontal; largura dos blocos =
+minutos reais × pxPorMinuto (zoom); a régua no topo fica fixa durante o scroll
+horizontal; a coluna de dias fica fixa durante scroll horizontal; biblioteca
+colapsável à esquerda.
+
+### 16.2 Limitações do modelo (sem mudança de modelos)
+
+- **Semana única recorrente** — não há navegação entre semanas nem períodos.
+- **Canal único (`antenna`)** — sem seleção de canal.
+- **Blocos não cruzam meia-noite** (paridade v1, `packages/core/schedule.ts`) —
+  arrastar/redimensionar trava em 24:00; exceder meia-noite exigiria mudança
+  de modelo, fora de escopo nesta versão.
+- **Sobreposição hoje: silenciosamente o primeiro ganha** (`currentBlock` usa
+  `find`) — D3 torna isso impossível de salvar a partir de agora.
+
+### 16.3 Backend (aditivo)
+
+- `packages/shared`: `scheduleUpdateSchema = { dayOfWeek?, startTime?, endTime? }` (hhmm).
+- `apps/api/scheduling.routes.ts`: `PATCH /schedule/:id` — atualiza os três campos
+  com checagem de conflito **server-side**: para o `dayOfWeek` resultante, rejeita
+  (409) se `start < other.end && other.start < end` contra qualquer outro bloco do
+  mesmo dia (excluindo a própria linha). Também valida `start < end`.
+- Playout não muda: `scheduledProgram()` roda a cada tick (5 s), então qualquer
+  mudança na grade vale a partir do tick seguinte; o vídeo em execução não
+  interrompe (a fila só se refaz quando o *programa* muda).
+
+### 16.4 Frontend — arquitetura modular
+
+```
+features/grade/
+  index.tsx            ← cabeçalho (título, zoom, Dia ▾, undo/redo, indicador)
+  TimelineBits.tsx     ← régua (ticks 60/30 min), grid de fundo, linha "agora"
+  DayLane.tsx          ← uma trilha por dia (label fixa à esquerda)
+  ScheduleBlock.tsx    ← bloco (conteúdo adaptativo: nome, icon, hh–hh, duração)
+  BlockModal.tsx       ← evolui o modal atual (nome, dia, início, fim, programa)
+  LibraryPanel.tsx     ← programas de GET /programs com filtro por gênero/origem
+  useTimelineDrag.ts   ← dnd-kit blocks + pointer handlers de resize
+  useScheduleMutations.ts ← mutations (react-query) + optimistic + rollback + undo/redo
+```
+
+- **Fonte única de verdade:** tudo derivado de `ScheduleRow` em minutos
+  (`dayOfWeek*1440 + start`, duração); `Math.round` de minutos → px só no final,
+  no render; ao soltar, o bloco sempre rehidrata de minutos para px — nunca se
+  trava posições em pixels (sem drift entre o que aparece e o que grava).
+- **Zoom:** `pxPerMinute` (default Auto = semana inteira na largura útil);
+  botões +/− e "Auto"; 0.35 a 6 px/min; visão "Dia" = scroll até o dia e margens
+  para o resto (régua continua).
+- **Desktop-first**; atalhos de teclado e navegação por teclado entram na F3.
+
+### 16.5 Regras de negócio na UI
+
+| Cenário | Tratamento |
+|---|---|
+| Duração < 5 min | alça trava no mínimo de 5 min (snap 5 min em qualquer arraste) |
+| Sobreposição no dia | região em vermelho + tooltip com os 2 blocos; **409 do PATCH** é a barreira final |
+| Único bloco por dia/excedente | mesma checagem do POST, no drag preview antes de soltar |
+| Bloco em execução | marcado com "● no ar" do estado SSE; resize dele é permitido só a partir da próxima semana (modelo semanal), sem tocar no vídeo corrente |
+| Programas noturnos que invadem 24:00 | trava em 24:00 (limitação 16.2) |
+| Lacunas | permitidas por design; fundo das lacunas mostra "livre (auto)" |
+
+### 16.6 Salvamento
+
+- Durante arraste/resize: **só estado local visual** (sem rede).
+- Ao soltar / soltar a alça: valida localmente → `PATCH` (ou `POST` no drop da
+  biblioteca) → optimistic com rollback em falha; indicador "● pendente → ✓
+  salvo / ⚠ falhou (estado anterior restaurado)".
+- Sem debounce de rede por pixel — gravação é no fim da interação, uma chamada
+  por bloco alterado.
+- `refetchInterval: 15000` da query `schedule` **sai** — invalidação explícita
+  (polling atrapalharia drag/undo); SSE de playout continua como está.
+- Undo/redo: pilha local de snapshots dos rows (máx. 30); refazer/reverter
+  chama PATCH com o snapshot (não confundir com histórico do backend).
+
+### 16.7 Fases (prioridade do usuário)
+
+| Fase | Entrega | Aceitação |
+|---|---|---|
+| **F1 — timeline + cálculos** | Régua/trilhas/blocos posicionados por minutos + zoom + linha "agora" + biblioteca renderizada (sem arrastar) + módulo de cálculo em `packages/core` com testes | Semana renderizada, largura ∝ duração, horários alinhados, régua fixa |
+| **F2 — dnd-kit + resize** | Arrastar entre horários/dias, alças de resize, preview fantasma, snap de 5 min, `PATCH /schedule/:id` + POST na biblioteca, bloqueio de conflito | Mover/redimensionar persiste; conflito nunca salva (409) |
+| **F3 — edição + histórico** | Modal completo, ações contextuais, undo/redo, indicador pendente/salvo, atalhos de teclado, tooltips, refinamento visual | Editar sem sair da timeline; undo desfaz; falha restaura o estado anterior |
+
+Fora de escopo nesta versão: semana/canal múltiplos (limitações 16.2);
+responsividade mobile além de "usável"; meia-noite cruzando blocos.
+
+## 17. v3.1 — Consolidação: corte das telas Programas e Mídias
+
+> Gestão de conteúdo passa a ser 100% na tela do Gênero; a Grade usa os
+> gêneros direto. **STATUS: implementado e verificado (17/10/2026).**
+> F1: tsc web ✓, build ✓, bundle sem `/programas` ✓, smoke grade
+> (201 via genreId · PATCH 200 · 409 · 400, blocos 12=12) ✓.
+> F2: build ✓, ▶ play-now muda `state.current` ✓, 🗑 delete 201→0 ✓,
+> toggle intacto ✓. F3: script in-container (docker exec + Prisma):
+> 22 links → Gameplays, 6 → Aquarismo de Manha, slide mantido solto,
+> "Jornal da Tarde" apagado (5 programas, todos com gênero), validação
+> de contagens ✓. F4: typecheck+lint+33 testes core ✓, `/programs` e
+> `GET /media` 404 ✓, `POST /schedule` 201 ✓, DELETE/play 404 em id
+> inexistente ✓, playout running ✓. Pending de validação visual do
+> usuário: gesto de arrastar gênero da biblioteca (dnd-kit) e o hover
+> com ▶/🗑 no grid.
+>
+> Ajuste pós-deploy (17/10, a pedido): hover do grid de mídia ficou com
+> **SÓ o 🗑 Apagar de vez** (▶ Colocar no ar e Remover/Reativar saíram
+> da UI; arquivar/reativar seguem possíveis via `PATCH /genres/:id/media/:id`).
+> Consequência conhecida: mídia apagada de vez pode voltar no próximo
+> sync (o dedupe preserva só arquivados).
+>
+> Ajuste pós-deploy 2 (17/10, a pedido): o ▶ Colocar no ar migrou para a
+> lista **"Próximos na programação"** (No Ar) — um ▶ por item da fila;
+> no playout, `playNow` agora **remove a mídia da fila** ao assumir o ar
+> (antes: o shift() a tocaria de novo em seguida). Smoke: item saiu da
+> fila ✓; o alvo do teste falhou ao abrir por bloqueio transitório do
+> YouTube (bot-check no yt-dlp) e o canal se auto-recuperou — fallback
+> funcionando.
+>
+> Incidente durante o deploy (resolvido, zero perda): escrita simultânea
+> host↔container no SQLite (bind mount Windows) clobberou frames do WAL
+> e novas conexões no container falharam com IOERR_SHORT_READ; restart
+> de api+playout restaurou a consistência (host tinha o estado completo;
+> o "sumiço" de 18 mídias era leitura de snapshot velho — eram as
+> inativas). Regra nova: **nenhuma escrita no banco a partir do host**
+> com containers no ar; jobs de dados via `docker exec` + PrismaClient
+> (critérios de match por id, não por título com acento).
+
+### 17.0 Decisões (clarify, 17/10/2026 — contrato de implementação)
+
+| # | Decisão | Escolha |
+|---|---------|---------|
+| D1 | Biblioteca lateral da Grade | **Listar gêneros** (ícone + cor) em vez de programas; arrastar cria o bloco via `POST /schedule { genreId }` (o backend cria/reaproveita o auto-programa, como já faz); campo "Programa" sai do BlockModal (criar passa a aceitar só gênero) |
+| D2 | Grid de mídia do gênero | Ganha **▶ Colocar no ar** e **🗑 Apagar de vez** no hover — APIs já existem (`POST /media/:id/play`, `DELETE /media/:id`), muda só UI |
+| D3 | Mídias soltas (29 sem fonte, herdadas do v1) | **Anexar por links manuais**: gameplay/Minecraft/Rocket League/Dayz → **Gameplays**; aquário/peixes → **Aquarismo de Manha**; "Teste de Padrão" (local, slide) fica solta de propósito |
+| D4 | API/types sem uso | **Cortar**: `programRoutes` inteiro e `GET/POST/PATCH /media`. Modelos `Program`/`ProgramSchedule` **ficam no banco** (grade + worker dependem) |
+| D5 | Programa "Jornal da Tarde" | **Apagar** (sem gênero, 0 blocos, o playout nem programa bloco de programa sem gênero) |
+
+Dados de apoio (sondagem 17/10/2026): 6 gêneros · 23 fontes · 384 mídias
+(355 via fonte, 29 soltas — 28 conteúdo único, 1 duplicata "Dayz") ·
+5 programas (4 auto + 1 manual sem gênero) · 11 blocos, todos em programas
+com gênero. `selectAuto` usa **qualquer mídia ativa**, então as 29 soltas
+tocam hoje na seleção automática — por isso D3 as re-assenta em vez de
+arquivar.
+
+### 17.1 Wireframe — nav e ações
+
+```
+NAV HOJE                       NAV DEPOIS
+┌────────────┐                 ┌────────────┐
+│ ● No Ar    │                 │ ● No Ar    │   player + fila
+│ ● Grade    │                 │ ● Grade    │   timeline — biblioteca lista GÊNEROS
+│ ● Gêneros  │                 │ ● Gêneros  │   gestão de conteúdo centralizada
+│ ● Programas│ ✗               │ ● Operação │
+│ ● Mídias   │ ✗               └────────────┘
+│ ● Operação │
+└────────────┘
+
+GRID DE MÍDIA DA FONTE — hover no thumb:
+┌ ▾  canal @FAGames1        12 vídeos (12 passam filtros)  ↻ ⚙ ⏸ 🗑
+│   ┌──────┬──────┬──────┐
+│   │thumb │thumb │thumb │    hover:
+│   │título│título│título│    ┌───────────────────────┐
+│   └──────┴──────┴──────┘    │ ▶  Colocar no ar      │  ← novo (API existente)
+│                             │ ⇄  Remover/Reativar   │  ← como hoje
+│                             │ 🗑  Apagar de vez      │  ← novo (API existente)
+│                             └───────────────────────┘
+
+BIBLIOTECA DA GRADE (painel esquerdo):                 DEPOIS
+HOJE                                                   ┌──────────────────┐
+┌──────────────────┐                                   │ 🔍 buscar        │
+│ 🔍 buscar        │                                   │                  │
+│ filtro: gênero ▾ │ ← some (redundante)               │ 🎮 Gameplays     │ ← ícone + cor
+│ Gameplays        │ ← programa                        │ 📺 Desbugados TV │    do gênero
+│ Retrô            │                                   │ 📼 Nostalgia     │
+│ Jornal da Tarde  │ ← sem gênero (nunca toca nada)    │ 🐟 Aquarismo…    │
+└──────────────────┘                                   └──────────────────┘
+```
+
+### 17.2 Escopo técnico
+
+Frontend (`apps/web`):
+- Deleta `features/programas.tsx` e `features/midias.tsx`, rotas
+  `/programas`/`/midias` e os itens de nav (ícones `Film`, `ListVideo`).
+- `LibraryPanel.tsx`: fonte vira `GET /genres`; item mostra ícone + cor +
+  nome; filtro "por gênero" sai; drag solta `POST /schedule` com `genreId`
+  (mesmo fluxo de drop de hoje).
+- `BlockModal.tsx`: criar só com Gênero (campo Programa removido); editar
+  segue igual (nunca mudava programa).
+- `genero-fontes.tsx` (grid de mídia): hover ganha ▶ e 🗑 além de
+  Remover/Reativar; `MediaActions` recebe `onPlay`/`onDelete`.
+- `lib/api.ts`: tipos/métodos dos endpoints mortos saem (`ProgramRow`…).
+
+Backend (`apps/api` + `packages/shared`, fase 4):
+- `programRoutes` fora (`app.ts` + `scheduling.routes.ts`);
+  `media.routes` reduz a `DELETE /media/:id` e `POST /media/:id/play`.
+- `shared`: `programCreate/UpdateSchema` e `mediaCreate/UpdateSchema`
+  saem se ficarem sem uso (grep antes de cortar — sync pode referenciar).
+- **Nenhuma migração de banco** — modelos `Program`/`ProgramSchedule`
+  permanecem; corte é de superfície (API/UI), não de modelo.
+
+Dados (fase 3): script one-shot com snapshot de contagens antes/depois;
+heurística por título decide o gênero de cada mídia solta e imprime a
+decisão de cada uma; valida que **restam 0 mídias soltas ativas além de
+"Teste de Padrão"**; apaga o programa "Jornal da Tarde".
+
+### 17.3 Fases
+
+| Fase | Entrega | Aceitação |
+|---|---|---|
+| **F1 — Programas sai** | Página/rota/nav fora; biblioteca da Grade lista gêneros; BlockModal sem campo Programa | typecheck + build ✓; arrastar gênero cria bloco (201); PATCH 200; conflito 409 e <5min 400 intactos; snapshot: 11 blocos antes = depois |
+| **F2 — Mídias sai** | Página/rota/nav fora; ▶ e 🗑 no grid do gênero | typecheck + build ✓; ▶ muda `state.current` (curl antes/depois); 🗑 reduz a contagem da fonte; Remover/Reativar intactos |
+| **F3 — Reassentar + limpeza** | Script: 28 soltas → links manuais (Gameplays/Aquarismo); "Teste de Padrão" fica; "Jornal da Tarde" apagado | contagens antes = depois; 0 soltas ativas restantes (além do slide); pools crescem (+gameplay, +6 aquarismo); 4 programas restantes, todos com gênero |
+| **F4 — Corte de API** | `programRoutes` fora; `media.routes` reduzida; rebuild api → web | smoke: `/api/v1/programs` 404 · `GET /media` 404 · `POST /schedule` 201 · `DELETE /media/:id` 200 · `POST /media/:id/play` 200 |
+
+Riscos: mudanças na biblioteca reusam o fluxo de drag existente (mesma
+matemática de drop dnd-kit); o playout não muda em nenhuma fase — fila
+estável preserva o vídeo corrente e tudo vale a partir do próximo tick.
+Rebuild obrigatório api → web na F4 (worker/playout intocados).

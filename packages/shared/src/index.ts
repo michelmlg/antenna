@@ -77,33 +77,7 @@ export const mixIngredientSchema = z.object({
 });
 export const mixUpdateSchema = z.object({ ingredients: z.array(mixIngredientSchema).min(1).max(8) });
 
-// ---------- mídias ----------
-export const mediaCreateSchema = z.object({
-  url: z.string().min(1).max(500),
-  title: z.string().max(200).optional(),
-  source: z.enum(["local", "youtube", "http", "fallback"]).optional(),
-  duration: z.number().int().min(0).optional(),
-  categories: z.array(z.string().max(60)).max(10).optional(),
-});
-export const mediaUpdateSchema = z.object({
-  title: z.string().max(200).optional(),
-  status: z.enum(["ativo", "inativo"]).optional(),
-  categories: z.array(z.string().max(60)).max(10).optional(),
-});
-
-// ---------- programas + grade ----------
-export const programCreateSchema = z.object({
-  name: z.string().min(1).max(80),
-  genreId: z.string().uuid().nullable().optional(),
-  description: z.string().max(300).optional(),
-  targetDuration: z.number().int().min(0).max(600).optional(),
-});
-export const programUpdateSchema = z.object({
-  name: z.string().min(1).max(80).optional(),
-  description: z.string().max(300).optional(),
-  targetDuration: z.number().int().min(0).max(600).optional(),
-  mixOverride: z.string().nullable().optional(),
-});
+// ---------- grade ----------
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const scheduleCreateSchema = z.object({
   genreId: z.string().uuid().optional(), // cria/reaproveita o auto-programa do gênero
@@ -111,6 +85,11 @@ export const scheduleCreateSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
   startTime: hhmm,
   endTime: hhmm,
+});
+export const scheduleUpdateSchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6).optional(),
+  startTime: hhmm.optional(),
+  endTime: hhmm.optional(),
 });
 
 // ---------- playout ----------

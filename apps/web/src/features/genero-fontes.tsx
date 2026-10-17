@@ -15,10 +15,10 @@ export function thumbOfMedia(m: { thumbnailUrl: string | null; resolvedId?: stri
 // ---------- grid de vídeos (CRUD inline) ----------
 function MediaCard({
   m,
-  onToggle,
+  onDelete,
 }: {
   m: MediaLite & { status: string };
-  onToggle: () => void;
+  onDelete?: () => void;
 }) {
   const thumb = thumbOfMedia(m);
   return (
@@ -32,16 +32,13 @@ function MediaCard({
           {m.status === "inativo" && <Badge tone="red">inativo</Badge>}
         </div>
       </div>
-      {/* ações no hover */}
+      {/* ação no hover: apagar de vez */}
       <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/70 opacity-0 transition-opacity group-hover:opacity-100">
-        <Button
-          size="sm"
-          variant={m.status === "ativo" ? "danger" : "signal"}
-          onClick={onToggle}
-          title={m.status === "ativo" ? "Remover da programação (arquivar)" : "Reativar"}
-        >
-          {m.status === "ativo" ? "Remover" : "Reativar"}
-        </Button>
+        {onDelete && (
+          <Button size="sm" variant="danger" onClick={onDelete} title="Apagar de vez (o vídeo sai da biblioteca)">
+            <Trash2 size={13} />
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -56,14 +53,18 @@ export function SourceMediaGrid({ genreId, sid, manual }: { genreId: string; sid
     enabled: !manual,
   });
 
-  const toggle = useMutation({
-    mutationFn: (m: MediaLite & { status: string }) =>
-      api.patch(`/genres/${genreId}/media/${m.id}`, { status: m.status === "ativo" ? "inativo" : "ativo" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["source-media", genreId, sid] }),
+  const delMedia = useMutation({
+    mutationFn: (m: MediaLite) => api.del(`/media/${m.id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["source-media"] });
+      qc.invalidateQueries({ queryKey: ["genre"] });
+    },
   });
-  const delLink = useMutation({
-    mutationFn: (m: MediaLite & { itemId: string }) => api.del(`/genres/${genreId}/links/${m.itemId}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["genre", genreId] }),
+  // manual: "apagar de vez" remove o link E o vídeo (sem a tela Mídias, não há outro caminho)
+  const delManual = useMutation({
+    mutationFn: (m: MediaLite & { itemId: string }) =>
+      api.del(`/genres/${genreId}/links/${m.itemId}`).then(() => api.del(`/media/${m.id}`)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["genre"] }),
   });
 
   if (manual) {
@@ -74,9 +75,16 @@ export function SourceMediaGrid({ genreId, sid, manual }: { genreId: string; sid
         <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted">Adicionados manualmente ({withItem.length})</div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
           {withItem.map((m) => (
-            <MediaCard key={m.id} m={m} onToggle={() => delLink.mutate(m)} />
+            <MediaCard
+              key={m.id}
+              m={m}
+              onDelete={() => {
+                if (window.confirm(`Apagar "${m.title}" de vez? O link e o vídeo saem da biblioteca.`)) delManual.mutate(m);
+              }}
+            />
           ))}
         </div>
+        <ErrorMsg error={delManual.error} />
       </div>
     );
   }
@@ -93,9 +101,16 @@ export function SourceMediaGrid({ genreId, sid, manual }: { genreId: string; sid
       </div>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
         {visible.map((m) => (
-          <MediaCard key={m.id} m={m} onToggle={() => toggle.mutate(m)} />
+          <MediaCard
+            key={m.id}
+            m={m}
+            onDelete={() => {
+              if (window.confirm(`Apagar "${m.title}" de vez? O vídeo sai da biblioteca (a fonte para de listá-lo).`)) delMedia.mutate(m);
+            }}
+          />
         ))}
       </div>
+      <ErrorMsg error={delMedia.error} />
       {items.length > take && (
         <div className="mt-2 text-center">
           <Button size="sm" onClick={() => setTake((t) => t + 12)}>

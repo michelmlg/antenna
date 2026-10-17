@@ -1,19 +1,16 @@
 /** Montagem do app Express. */
-import path from "node:path";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
-import { auth } from "./lib/auth";
 import { errorHandler, notFound } from "./lib/http";
 import { logger } from "./lib/logger";
 import { eventsRoutes } from "./modules/events.routes";
 import { mediaRoutes } from "./modules/media.routes";
 import { playoutRoutes } from "./modules/playout.routes";
-import { programRoutes, scheduleRoutes } from "./modules/scheduling.routes";
+import { scheduleRoutes } from "./modules/scheduling.routes";
 import { streamRoutes } from "./modules/stream.routes";
 import { syncRoutes } from "./modules/sync.routes";
 import genresRouter from "./modules/genres.routes";
-import genresSub from "./modules/genres.sub.routes";
 
 export function buildApp(): express.Express {
   const app = express();
@@ -28,7 +25,6 @@ export function buildApp(): express.Express {
 
   app.use("/api/v1/genres", genresRouter);
   app.use("/api/v1/media", mediaRoutes);
-  app.use("/api/v1/programs", programRoutes);
   app.use("/api/v1/schedule", scheduleRoutes);
   app.use("/api/v1/playout", playoutRoutes);
   app.use("/api/v1/sync", syncRoutes);

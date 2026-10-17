@@ -5,14 +5,8 @@
  */
 import { Router } from "express";
 import { prisma } from "@antenna/database";
-import { buildPools, composeCycle, parseFilters, summary } from "@antenna/core";
-import {
-  genreCreateSchema,
-  genreUpdateSchema,
-  mixUpdateSchema,
-  sourceCreateSchema,
-  sourceUpdateSchema,
-} from "@antenna/shared";
+import { buildPools, parseFilters, summary } from "@antenna/core";
+import { genreCreateSchema, genreUpdateSchema } from "@antenna/shared";
 import { auth } from "../lib/auth";
 import { HttpError, wrap } from "../lib/http";
 import { worker } from "../lib/worker";
@@ -24,11 +18,6 @@ router.use(auth);
 
 // Rotas aninhadas sob /:id (fontes, links, mistura, sync, preview)
 router.use("/:id", genresSub);
-
-const clampInt = (v: unknown, min: number, max: number, def: number): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? Math.min(Math.max(Math.round(n), min), max) : def;
-};
 
 const sourceView = (s: {
   filters: string | null;

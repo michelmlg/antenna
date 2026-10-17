@@ -51,10 +51,14 @@ export function notFound(req: Request, res: Response): void {
   res.status(404).send("não encontrado");
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
   if (err instanceof HttpError) {
     res.status(err.status).json({ error: err.message, code: err.code });
+    return;
+  }
+  if (err instanceof ZodError) {
+    // body malformado/ausente (JSON.parse morno da controller `.parse` direto) → 400, não 500
+    res.status(400).json({ error: resumo(err), code: "VALIDATION" });
     return;
   }
   logger.error({ err }, "unhandled");

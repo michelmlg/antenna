@@ -310,6 +310,8 @@ async function playNow(mediaId: string): Promise<void> {
   killProc(state.proc);
   state.proc = null;
   state.cooldownUntil = 0;
+  // se a mídia estava na fila, sai dela (senão o shift() a tocaria de novo em seguida)
+  state.queue = state.queue.filter((q) => q.mediaId !== media.id);
   const program = await scheduledProgram();
   await startItem({ media, program });
   await publish().catch(() => {});

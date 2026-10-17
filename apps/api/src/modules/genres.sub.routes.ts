@@ -8,8 +8,6 @@ import { worker } from "../lib/worker";
 
 const sub = Router({ mergeParams: true });
 
-const SCOPES = ["links", "source", "genre", "category"];
-
 const clampInt = (v: unknown, min: number, max: number, def: number): number => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(Math.max(Math.round(n), min), max) : def;

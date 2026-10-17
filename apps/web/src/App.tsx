@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Clapperboard, Film, ListVideo, RadioTower, Settings, Tv } from "lucide-react";
+import { CalendarDays, Clapperboard, RadioTower, Settings, Tv } from "lucide-react";
 import { api, type PlayoutState } from "./lib/api";
 import { useAntennaEvents } from "./lib/sse";
 import { Badge } from "./components/ui";
@@ -9,16 +9,12 @@ import NoAr from "./features/noar";
 import Generos from "./features/generos";
 import GeneroDetalhe from "./features/genero-detalhe";
 import Grade from "./features/grade";
-import Programas from "./features/programas";
-import Midias from "./features/midias";
 import Operacao from "./features/operacao";
 
 const NAV = [
   { to: "/", label: "No Ar", icon: Tv },
   { to: "/grade", label: "Grade", icon: CalendarDays },
   { to: "/generos", label: "Gêneros", icon: Clapperboard },
-  { to: "/programas", label: "Programas", icon: Film },
-  { to: "/midias", label: "Mídias", icon: ListVideo },
   { to: "/operacao", label: "Operação", icon: Settings },
 ];
 
@@ -96,8 +92,6 @@ export default function App() {
             <Route path="/grade" element={<Grade />} />
             <Route path="/generos" element={<Generos />} />
             <Route path="/generos/:id" element={<GeneroDetalhe />} />
-            <Route path="/programas" element={<Programas />} />
-            <Route path="/midias" element={<Midias />} />
             <Route path="/operacao" element={<Operacao />} />
           </Routes>
         </main>

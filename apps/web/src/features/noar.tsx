@@ -1,8 +1,8 @@
 /** No Ar — LivePlayer, agora tocando, fila estável (thumbs/gênero/canal/link), Pular. */
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { ExternalLink, SkipForward } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, Play, SkipForward } from "lucide-react";
 import { api, type HistoryRow, type PlayoutState, type QueueItemView, type ScheduleRow, type StreamInfo } from "../lib/api";
-import { Badge, Button, Card, Empty, Spinner, fmtDur } from "../components/ui";
+import { Badge, Button, Card, Empty, ErrorMsg, Spinner, fmtDur } from "../components/ui";
 import { LivePlayer } from "../components/LivePlayer";
 import { GenreIcon } from "../lib/icons";
 
@@ -28,7 +28,7 @@ function Progress({ startedAt, duration }: { startedAt: string; duration: number
   );
 }
 
-function QueueList({ items, program }: { items: QueueItemView[]; program: string | null }) {
+function QueueList({ items, program, onPlay }: { items: QueueItemView[]; program: string | null; onPlay?: (mediaId: string) => void }) {
   if (!items.length) return <Empty>fila vazia — gerando a próxima sequência…</Empty>;
   return (
     <ol className="space-y-2">
@@ -60,6 +60,16 @@ function QueueList({ items, program }: { items: QueueItemView[]; program: string
                 <span className="text-[11px] text-muted">{fmtDur(it.duration)}</span>
               </div>
             </div>
+            {onPlay && (
+              <Button
+                size="sm"
+                variant="ghost"
+                title="Colocar no ar agora (interrompe o atual e consome este item da fila)"
+                onClick={() => onPlay(it.mediaId)}
+              >
+                <Play size={14} className="text-signal" />
+              </Button>
+            )}
             {isYT && (
               <a
                 href={it.url}
@@ -93,6 +103,11 @@ export default function NoAr() {
   const start = useMutation({ mutationFn: () => api.post("/playout/start") });
   const stop = useMutation({ mutationFn: () => api.post("/playout/stop") });
   const skip = useMutation({ mutationFn: () => api.post("/playout/next") });
+  const qc = useQueryClient();
+  const play = useMutation({
+    mutationFn: (mediaId: string) => api.post(`/media/${mediaId}/play`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["playout-state"] }),
+  });
 
   const hlsUrl = stream ? `${location.origin}${stream.hlsPath}` : null;
   const cur = state?.current;
@@ -144,8 +159,9 @@ export default function NoAr() {
           Próximos na programação
         </div>
         <div className="mt-2">
-          <QueueList items={state?.queue ?? []} program={cur?.programName ?? state?.next?.program ?? null} />
+          <QueueList items={state?.queue ?? []} program={cur?.programName ?? state?.next?.program ?? null} onPlay={(id) => play.mutate(id)} />
         </div>
+        <ErrorMsg error={play.error} />
       </Card>
 
       {/* grade de hoje */}
