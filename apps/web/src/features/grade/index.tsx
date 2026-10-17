@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { DndContext, DragOverlay, type DragEndEvent, type DragMoveEvent, type DragStartEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragOverlay, type DragEndEvent, type DragMoveEvent, type DragStartEvent, PointerSensor, useSensor, useSensors, type Modifier } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Button, Card, Spinner } from "../../components/ui";
 import { api, type GenreRow, type PlayoutState, type ScheduleRow } from "../../lib/api";
@@ -28,6 +28,21 @@ interface DragState {
 
 type Zoom = "auto" | number;
 const ZOOM_STEPS: number[] = [0.35, 0.75, 1.5, 3, 5];
+
+/** Modifier do dnd-kit: centraliza o chip arrastado NO CURSOR (a posição do
+ * elemento traduzido deslocava a prévia — agora prévia e overlay miram o ponteiro). */
+const centerOnCursor: Modifier = ({ draggingNodeRect, transform, activatorEvent }) => {
+  const base = transform ?? { x: 0, y: 0, scaleX: 1, scaleY: 1 };
+  const ae = activatorEvent as PointerEvent | MouseEvent | null;
+  if (!draggingNodeRect || !ae || ae.clientX == null) return base;
+  const curX = ae.clientX + base.x;
+  const curY = ae.clientY + base.y;
+  return {
+    ...base,
+    x: curX - (draggingNodeRect.left + draggingNodeRect.width / 2),
+    y: curY - (draggingNodeRect.top + draggingNodeRect.height / 2),
+  };
+};
 
 export default function Grade() {
   const sched = useGradeSchedule();
@@ -170,17 +185,27 @@ export default function Grade() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const libGenre = useRef<GenreRow | null>(null);
   const [libActive, setLibActive] = useState<GenreRow | null>(null);
+  // ponteiro BRUTO: ev.delta do dnd-kit vem pós-modifier (centraliza no cursor) e
+  // não serve para derivar a posição do mouse — rastreamos o pointermove direto.
+  const rawPointer = useRef({ x: 0, y: 0 });
+  const rawTrackRef = useRef<((e: PointerEvent) => void) | null>(null);
+  const stopRawTrack = useCallback(() => {
+    if (rawTrackRef.current) {
+      document.removeEventListener("pointermove", rawTrackRef.current, true);
+      rawTrackRef.current = null;
+    }
+  }, []);
 
   const libPreview = useCallback(
     (ev: DragMoveEvent | DragEndEvent): Preview | null => {
-      const t = ev.active.rect.current.translated;
       const genre = libGenre.current;
-      if (!t || !genre) return null;
-      const dow = laneUnder(t.top + t.height / 2);
+      if (!genre) return null;
+      const { x: pointerX, y: pointerY } = rawPointer.current;
+      const dow = laneUnder(pointerY);
       if (dow === null) return null;
-      const left = trackLeft();
       const dur = 60; // bloco-padrão de 1h (gênero não tem duração alvo)
-      const start = Math.min(1440 - dur, Math.max(0, snapMinutes(Math.round(((t.left + t.width / 2 - left) / px - dur / 2)))));
+      const pointerMin = Math.round((pointerX - trackLeft()) / px);
+      const start = Math.min(1440 - dur, Math.max(0, snapMinutes(pointerMin - Math.round(dur / 2))));
       const end = start + dur;
       return { dow, start, end, valid: !hasOverlap(rows, dow, start, end) };
     },
@@ -192,6 +217,13 @@ export default function Grade() {
     if (d?.kind === "library" && d.genre) {
       libGenre.current = d.genre;
       setLibActive(d.genre);
+      const ae = ev.activatorEvent as PointerEvent | undefined;
+      rawPointer.current = { x: ae?.clientX ?? 0, y: ae?.clientY ?? 0 };
+      const track = (e: PointerEvent) => {
+        rawPointer.current = { x: e.clientX, y: e.clientY };
+      };
+      rawTrackRef.current = track;
+      document.addEventListener("pointermove", track, true);
     }
   }, []);
 
@@ -199,6 +231,7 @@ export default function Grade() {
 
   const onDragEnd = useCallback(
     (ev: DragEndEvent) => {
+      stopRawTrack();
       const genre = libGenre.current;
       const p = ev.over ? libPreview(ev) : null;
       libGenre.current = null;
@@ -213,8 +246,15 @@ export default function Grade() {
         endTime: minutesToHHMM(p.end),
       });
     },
-    [addBlock, libPreview]
+    [addBlock, libPreview, stopRawTrack]
   );
+
+  const onDragCancel = useCallback(() => {
+    stopRawTrack();
+    libGenre.current = null;
+    setLibActive(null);
+    setPreview(null);
+  }, [stopRawTrack]);
 
   // ---- linha "agora" ----
   const [now, setNow] = useState(() => ({ dow: new Date().getDay(), min: new Date().getHours() * 60 + new Date().getMinutes() }));
@@ -368,10 +408,10 @@ export default function Grade() {
       {sched.isLoading ? (
         <Spinner />
       ) : (
-        <div className="flex gap-3">
-          <LibraryPanel open={libOpen} onToggle={() => setLibOpen((v) => !v)} onNewBlock={() => setModal({ mode: "create" })} />
-          <Card className="min-w-0 flex-1 p-0">
-            <DndContext sensors={sensors} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd}>
+        <DndContext sensors={sensors} modifiers={[centerOnCursor]} onDragStart={onDragStart} onDragMove={onDragMove} onDragEnd={onDragEnd} onDragCancel={onDragCancel}>
+          <div className="flex gap-3">
+            <LibraryPanel open={libOpen} onToggle={() => setLibOpen((v) => !v)} onNewBlock={() => setModal({ mode: "create" })} />
+            <Card className="min-w-0 flex-1 p-0">
               <div ref={scrollerRef} className="overflow-y-auto overflow-x-auto rounded-lg" style={{ height: "calc(100vh - 190px)", minHeight: 340 }}>
                 <div style={{ width: LABEL_W + 1440 * px + 2 }} className="relative">
                   {/* régua (sticky) */}
@@ -409,19 +449,19 @@ export default function Grade() {
                   ))}
                 </div>
               </div>
-              <DragOverlay dropAnimation={null}>
-                {libActive ? (
-                  <div className="rounded border bg-surface px-2 py-1.5 text-xs shadow-lg" style={{ borderLeft: `3px solid ${libActive.color}` }}>
-                    {libActive.name}
-                  </div>
-                ) : null}
-              </DragOverlay>
-            </DndContext>
             <div className="border-t border-muted/10 px-3 py-2 text-[11px] text-muted">
               duplo-clique = editar · arrastar = mover · bordas = redimensionar · <kbd>N</kbd> novo · <kbd>D</kbd> duplicar · <kbd>Del</kbd> excluir · <kbd>Ctrl+Z</kbd>/<kbd>Ctrl+Y</kbd>
             </div>
           </Card>
-        </div>
+          </div>
+          <DragOverlay dropAnimation={null}>
+            {libActive ? (
+              <div className="rounded border bg-surface px-2 py-1.5 text-xs shadow-lg" style={{ borderLeft: `3px solid ${libActive.color}` }}>
+                {libActive.name}
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {modal && (
