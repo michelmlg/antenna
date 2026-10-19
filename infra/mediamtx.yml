@@ -29,6 +29,11 @@ hlsVariant: mpegts
 rtmp: yes
 rtmpAddress: :1935
 
+# Secret CDN: clientes que mandam 'Authorization: Bearer <secret>' pulam o
+# cookie-check do HLS (302) — necessário p/ ffmpeg com -reconnect (Jellyfin),
+# que perde o cookie no reconnect e recebe playlists vazias.
+hlsCDNSecret: "antenna-cdn-hls-7Kx92mQz"
+
 paths:
   # canal principal — o FFmpeg do worker publica aqui
   antenna:
