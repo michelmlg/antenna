@@ -632,3 +632,34 @@ próximo tick`, confirmável na 1ª ocorrência natural. Resíduo aceito na opç
 drift de stalls recuperados até a morte terminal. Nota de operação: o
 `docker-compose.yml` vive em `infra/` — `docker compose` da raiz falha com "no
 configuration file provided" (e pipe com `tail` mascara o exit).
+
+## 20. v3.2.2 — Camada IPTV: identidade de canal + guia (EPG) para o Jellyfin (19/10/2026)
+
+**Diagnóstico**: o HLS em si já tinha os metadados de stream (PDTE por
+segmento, codecs/resolução no master). O que faltava era a camada IPTV — o
+tuner do Jellyfin apontava pro `index.m3u8` cru, que não tem `#EXTINF` algum,
+e não existia XMLTV (sem guia: "só nomes de canal, sem programação").
+
+**Implementado** (decisão: Fases 1+2, sem logo):
+- `GET /api/v1/iptv/channels.m3u` (pública, `audio/x-mpegurl`): LISTA de canais
+  com `tvg-id="antenna.br"`, `tvg-name`, `group-title` + stream
+  `/hls/antenna/index.m3u8`. Host/porta derivados do request (Jellyfin usa o
+  mesmo front door). `x-tvg-url` aponta pro guia.
+- `GET /api/v1/epg/guide.xml` (pública, `application/xml`): XMLTV gerado da
+  grade semanal — `epgXmltv()` pura em `packages/core/src/epg.ts` (+6 testes).
+  Semântica IDÊNTICA ao playout: hora local do servidor, bloco com
+  end<=start nunca vai pro ar (paridade currentBlock). Janela ±3 dias;
+  buracos viram "Programação automática" fatiada à meia-noite; overlap
+  aparado; XML escapado; offset local (`-0300`) nos carimbos.
+- `infra/nginx.conf`: `/api/` agora passa `Host: $http_host` (preserva a
+  PORTA — `$host` descartava e o Jellyfin cairia na porta 80 fechada).
+
+**Configuração no Jellyfin** (manual do usuário): Live TV → Tuner M3U =
+`http://<host>:3000/api/v1/iptv/channels.m3u`; TV Guide Data Providers →
+XMLTV = `http://<host>:3000/api/v1/epg/guide.xml`; Map channels (o
+`tvg-id` casa com o `id` do XMLTV); Refresh guide.
+
+**Verificação**: 43 testes verdes (6 novos), typecheck completo limpo, 4
+endpoints 200 pelo front door (SPA/api/hls/epg), M3U ecoando host:porta
+corretos. Follow-ups: EPG por mídia (títulos reais da fila), logo do canal,
+`hlsSegmentDuration` fixo no MediaMTX.

@@ -5,6 +5,7 @@ import helmet from "helmet";
 import { errorHandler, notFound } from "./lib/http";
 import { logger } from "./lib/logger";
 import { eventsRoutes } from "./modules/events.routes";
+import { iptvRoutes } from "./modules/iptv.routes";
 import { mediaRoutes } from "./modules/media.routes";
 import { playoutRoutes } from "./modules/playout.routes";
 import { scheduleRoutes } from "./modules/scheduling.routes";
@@ -30,6 +31,7 @@ export function buildApp(): express.Express {
   app.use("/api/v1/sync", syncRoutes);
   app.use("/api/v1/stream", streamRoutes);
   app.use("/api/v1", eventsRoutes);
+  app.use("/api/v1", iptvRoutes);
 
   app.use(notFound);
   app.use(errorHandler);
