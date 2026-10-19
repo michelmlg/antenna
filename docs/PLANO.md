@@ -601,3 +601,34 @@ Rebuild obrigatório api → web na F4 (worker/playout intocados).
 
 Validação visual do usuário: afinação do gesto (arrastar da biblioteca,
 mover, alças), largura da biblioteca. Ajustes de gosto no painel.
+
+## 19. v3.2.1 — Playout: corte automático quando um input do FFmpeg morre (19/10/2026)
+
+**Bug**: vídeo rodando com áudio de outro trecho/vídeo ("sobreposição"). Causa
+raiz: toda mídia YouTube sobe como FFmpeg de 2 inputs independentes (vídeo itag
+137 + áudio webm, cada um com `-stream_loop -1` e `-re` próprio). O input de
+áudio (googlevideo) morre no meio do stream com frequência; o FFmpeg **não
+morre** — recupera com Range-resume (PTS do áudio congela, vídeo avança =
+dessincroniza acumulando) e, quando o demuxer desiste, o `-stream_loop` reabre
+o áudio do byte 0 (áudio salta pro início do vídeo). O playout não enxergava:
+`durationEnded` é relógio × duração do DB e `lastError` era display-only.
+MediaMTX nunca teve 2 publishers (muxer é destruído antes do próximo) — a
+divergência nasce no stream publicado, não no player.
+
+**Correção (opção B aprovada — manter 1080p, cortar):**
+- `engine.ts`: `isInputDeath(line)` — true só para `Error during demuxing` em
+  `in#N` (morte terminal). Transitórios (`Read error`, `Stream ends prematurely`)
+  seguem sendo só log (o retry de Range os recupera).
+- `playout.ts`: stderr por-proc; morte no proc atual → `state.inputDead` → o
+  tick corta o item (≤2 ticks), grava `result="error"` e avança a fila.
+
+**Verificação**: 4 testes unitários com as linhas reais de produção; `tsc` limpo;
+drill end-to-end (mídia cuja fonte morre → item cortado automaticamente, canal
+se recupera sozinho); smoke pós-deploy (worker online, fila restaurada, m3u8 200
+pelo front door). Cobertura honesta: o drill exercita o corte por morte do
+processo; o caminho do `inputDead` (áudio morre com vídeo vivo — o caso real de
+2 inputs) fica com o teste unitário + log `[playout] input morreu — corte no
+próximo tick`, confirmável na 1ª ocorrência natural. Resíduo aceito na opção B:
+drift de stalls recuperados até a morte terminal. Nota de operação: o
+`docker-compose.yml` vive em `infra/` — `docker compose` da raiz falha com "no
+configuration file provided" (e pipe com `tail` mascara o exit).

@@ -8,7 +8,7 @@ import type { PlayoutStatePayload, QueueItem } from "@antenna/shared";
 import { composeCycle, fallbackMedia, selectAuto } from "@antenna/core";
 import { currentBlock } from "@antenna/core";
 import { config } from "./config";
-import { isFfmpegError, isYoutube, killProc, probeVideoCodec, resolveInput, spawnFFmpeg } from "./engine";
+import { isFfmpegError, isYoutube, isInputDeath, killProc, probeVideoCodec, resolveInput, spawnFFmpeg } from "./engine";
 import { writeState } from "./state";
 
 type Picked = {
@@ -31,6 +31,7 @@ const state = {
   since: null as Date | null,
   cooldownUntil: 0,
   starting: false, // um startItem em andamento (evita dois FFmpeg juntos)
+  inputDead: false, // ffmpeg do proc ATUAL perdeu um input de forma terminal (corta no tick)
   errors: 0,
   restarts: 0,
   lastError: null as string | null,
@@ -195,10 +196,19 @@ async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } =
 
     killProc(state.proc);
     state.proc = null;
+    state.inputDead = false; // sinal do proc anterior não contamina o novo
     // YouTube: SEMPRE transcodifica; local: copy se h264
     const fromYT = isYoutube(picked.media.url, picked.media.source);
     const videoCodec = fromYT ? null : await probeVideoCodec(inputs[0]);
-    const proc = spawnFFmpeg(inputs, videoCodec, onFfmpegLine);
+    const proc = spawnFFmpeg(inputs, videoCodec, (line) => {
+      onFfmpegLine(line);
+      // morte terminal de input no proc ATUAL → o par vídeo/áudio quebrou;
+      // o tick corta o item e avança (ver tick). Linhas de procs antigos caem fora.
+      if (state.proc === proc && isInputDeath(line)) {
+        state.inputDead = true;
+        console.log("[playout] input morreu — corte no próximo tick");
+      }
+    });
     state.proc = proc;
     proc.on("exit", (code, signal) => {
       if (state.proc === proc) state.proc = null;
@@ -248,8 +258,9 @@ async function tick(): Promise<void> {
       const elapsed = (Date.now() - state.current.startedAt.getTime()) / 1000;
       const durationEnded = state.current.media.duration > 0 && elapsed >= state.current.media.duration;
       const programChanged = !!program && state.current.program?.id !== program.id;
-      if (durationEnded || programChanged) {
-        await finishCurrent(state.current.isFallback ? "fallback" : "success");
+      if (durationEnded || programChanged || state.inputDead) {
+        // input morto (sem fim natural) → "error": o par vídeo/áudio quebrou no ar
+        await finishCurrent(!durationEnded && state.inputDead ? "error" : state.current.isFallback ? "fallback" : "success");
         killProc(state.proc);
         state.proc = null;
       }

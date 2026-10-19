@@ -94,6 +94,18 @@ export function isFfmpegError(line: string): boolean {
   return /error|failed|refused|forbidden|invalid|could not|no such|unable|timed out|connection lost/i.test(line);
 }
 
+/**
+ * Morte TERMINAL de input: "Error during demuxing" em qualquer in#N = o demuxer
+ * desistiu daquele input. Com -stream_loop o ffmpeg pode reabri-lo do byte 0
+ * (áudio salta pro início do vídeo) ou continuar sem ele (vídeo rolando sem
+ * áudio) — o par vídeo/áudio fica quebrado NA MESMA publicação. Avisos
+ * transitórios (Read error, Stream ends prematurely) NÃO são morte: o retry de
+ * Range do http os recupera no mesmo ponto do stream.
+ */
+export function isInputDeath(line: string): boolean {
+  return line.startsWith("[in#") && line.includes("Error during demuxing");
+}
+
 export function killProc(proc: ChildProcess | null): void {
   if (!proc) return;
   try {
