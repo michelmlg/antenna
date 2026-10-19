@@ -177,6 +177,7 @@ async function startItem(picked: Picked, opts: { isFallbackRetry?: boolean } = {
 }
 
 async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } = {}): Promise<void> {
+    const old = state.proc; // handover: o novo assume o path ANTES de o velho morrer
     let inputs: string[];
     try {
       inputs = await resolveInput(picked.media);
@@ -194,8 +195,6 @@ async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } =
       return;
     }
 
-    killProc(state.proc);
-    state.proc = null;
     state.inputDead = false; // sinal do proc anterior não contamina o novo
     // YouTube: SEMPRE transcodifica; local: copy se h264
     const fromYT = isYoutube(picked.media.url, picked.media.source);
@@ -210,9 +209,15 @@ async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } =
       }
     });
     state.proc = proc;
+    // MediaMTX troca publicadores no mesmo path de forma atômica (o novo entra,
+    // o antigo é chutado) — dá um tempo pro handshake do novo e só então mata
+    // o velho: o muxer HLS nunca fica sem publicador (sem vão de 404/EOF).
+    await new Promise((r) => setTimeout(r, 1500));
+    killProc(old);
     proc.on("exit", (code, signal) => {
-      if (state.proc === proc) state.proc = null;
-      if (state.running && code !== 0 && signal !== "SIGTERM" && signal !== "SIGKILL") {
+      // só o proc ATUAL é falha real de reprodução (o antigo chutado no handover
+      // sai com code!=0 por conexão terminada — não conta)
+      if (state.proc === proc && state.running && code !== 0 && signal !== "SIGTERM" && signal !== "SIGKILL") {
         state.errors += 1;
         state.restarts += 1;
         state.cooldownUntil = Date.now() + 3000;
@@ -260,9 +265,8 @@ async function tick(): Promise<void> {
       const programChanged = !!program && state.current.program?.id !== program.id;
       if (durationEnded || programChanged || state.inputDead) {
         // input morto (sem fim natural) → "error": o par vídeo/áudio quebrou no ar
+        // (sem killProc aqui: o handover do startItem troca publicadores sem vão)
         await finishCurrent(!durationEnded && state.inputDead ? "error" : state.current.isFallback ? "fallback" : "success");
-        killProc(state.proc);
-        state.proc = null;
       }
     }
 
@@ -318,8 +322,6 @@ async function playNow(mediaId: string): Promise<void> {
   if (!media) throw new Error("Mídia não encontrada");
   if (!state.running) await start();
   await finishCurrent("stopped");
-  killProc(state.proc);
-  state.proc = null;
   state.cooldownUntil = 0;
   // se a mídia estava na fila, sai dela (senão o shift() a tocaria de novo em seguida)
   state.queue = state.queue.filter((q) => q.mediaId !== media.id);
@@ -340,8 +342,6 @@ async function skipNext(): Promise<void> {
     return;
   }
   await finishCurrent("skipped");
-  killProc(state.proc);
-  state.proc = null;
   state.cooldownUntil = 0;
   const program = await scheduledProgram();
   const picked = await pickNext(program);

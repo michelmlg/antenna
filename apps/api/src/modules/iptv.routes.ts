@@ -23,17 +23,17 @@ function baseUrl(req: Request): string {
 
 // GET /api/v1/iptv/channels.m3u — LISTA de canais (não é o m3u8 de stream);
 // é essa peça que dá identidade ao canal no tuner (tvg-id casa com o XMLTV).
-// O stream vai como RTSP: o ffmpeg remuxador do Jellyfin roda com
-// -reconnect_streamed/-reconnect_at_eof fixos, que quebram a abertura do HLS
-// do MediaMTX (cookie-check vira playlist vazia) — RTSP é o transporte nativo
-// de IPTV e abre direto; na troca de mídia o Jellyfin reinicia o stream
-// (RequiresLooping) e se recupera sozinho.
+// O stream vai como HLS pela front door (o nginx injeta o Bearer do
+// hlsCDNSecret — sem o 302 de cookie-check que quebrava ffmpeg com
+// -reconnect). NO JELLYFIN, deixar "Auto-loop live streams" DESLIGADO: as
+// flags de loop/reconnect do Jellyfin quebram a abertura do HLS do MediaMTX;
+// a continuidade nas trocas de mídia vem do handover sem vão do playout.
 iptvRoutes.get("/iptv/channels.m3u", (req: Request, res: Response) => {
-  const host = (req.headers.host ?? `localhost:${config.apiPort}`).split(":")[0];
+  const base = baseUrl(req);
   const m3u = [
-    `#EXTM3U x-tvg-url="${baseUrl(req)}/api/v1/epg/guide.xml"`,
+    `#EXTM3U x-tvg-url="${base}/api/v1/epg/guide.xml"`,
     `#EXTINF:-1 tvg-id="${CHANNEL_ID}" tvg-name="${channelName}" group-title="TV local",${channelName}`,
-    `rtsp://${host}:${config.rtspPort}/${config.channel}`,
+    `${base}/hls/${config.channel}/index.m3u8`,
     "",
   ].join("\n");
   res.type("audio/x-mpegurl").send(m3u);

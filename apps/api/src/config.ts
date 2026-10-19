@@ -12,7 +12,6 @@ function num(name: string, def: number): number {
 export const config = {
   apiPort: num("API_PORT", 3001),
   channel: process.env.CHANNEL || "antenna",
-  rtspPort: num("RTSP_PORT", 8554),
   playoutUrl: (process.env.PLAYOUT_URL || "http://localhost:3100").replace(/\/+$/, ""),
   mtxApiUrl: (process.env.MTX_API_URL || "http://localhost:9997").replace(/\/+$/, ""),
   adminToken: process.env.ADMIN_TOKEN || "",
