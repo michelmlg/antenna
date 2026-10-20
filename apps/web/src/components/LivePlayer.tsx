@@ -16,12 +16,15 @@ export function LivePlayer({
   live,
   mediaKey,
   offlineLabel = "canal parado — inicie o playout",
+  offlineAction,
 }: {
   src: string | null;
   /** muda quando a mídia no ar troca → recarrega a fonte sozinho */
   mediaKey?: string;
   live: boolean;
   offlineLabel?: string;
+  /** ação opcional no estado offline (ex.: iniciar o playout direto daqui) */
+  offlineAction?: { label: string; onClick: () => void };
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -162,7 +165,18 @@ export function LivePlayer({
       {(state === "connecting" || state === "offline" || state === "stalled") && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/70">
           {state === "offline" ? (
-            <p className="text-sm text-muted">{offlineLabel}</p>
+            <div className="flex flex-col items-center gap-3">
+              <p className="text-sm text-muted">{offlineLabel}</p>
+              {offlineAction && (
+                <button
+                  type="button"
+                  onClick={offlineAction.onClick}
+                  className="rounded-lg bg-signal px-3.5 py-2 text-sm font-semibold text-background shadow-sm shadow-signal/20 transition-all hover:bg-signal/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/50"
+                >
+                  {offlineAction.label}
+                </button>
+              )}
+            </div>
           ) : (
             <Loader
               label={state === "stalled" ? "reconectando ao canal…" : "conectando ao canal…"}

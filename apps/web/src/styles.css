@@ -1,3 +1,6 @@
+/* Inter variable empacotada local (@fontsource) — funciona offline na LAN */
+@import "@fontsource-variable/inter";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,7 +13,14 @@ body,
 
 body {
   @apply bg-background text-foreground;
-  font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  font-family: "Inter Variable", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+/* tempos/durações/contadores: numerais tabulares para não "dançarem" ao atualizar */
+@layer utilities {
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 *::-webkit-scrollbar {
