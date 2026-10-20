@@ -7,18 +7,28 @@ import { scheduleCreateSchema, scheduleUpdateSchema } from "@antenna/shared";
 import { auth } from "../lib/auth";
 import { HttpError, wrap } from "../lib/http";
 
-const SCHEDULE_INCLUDE = { program: { include: { genre: { select: { id: true, name: true, color: true, icon: true } } } } };
+const SCHEDULE_INCLUDE = {
+  program: { include: { genre: { select: { id: true, name: true, color: true, icon: true } } } },
+};
 
 /** Confere tamanho mínimo e sobreposição no dia destino antes de gravar (409). */
-async function assertScheduleFits(data: { dayOfWeek: number; startTime: string; endTime: string }, excludeId?: string) {
+async function assertScheduleFits(
+  data: { dayOfWeek: number; startTime: string; endTime: string },
+  excludeId?: string,
+) {
   const start = toMin(data.startTime);
   const end = toMin(data.endTime);
   if (end <= start) throw new HttpError(400, "endTime deve ser depois de startTime");
   if (end - start < MIN_DURATION) throw new HttpError(400, `duração mínima: ${MIN_DURATION} min`);
-  const others = await prisma.programSchedule.findMany({ where: { dayOfWeek: data.dayOfWeek, ...(excludeId ? { id: { not: excludeId } } : {}) } });
+  const others = await prisma.programSchedule.findMany({
+    where: { dayOfWeek: data.dayOfWeek, ...(excludeId ? { id: { not: excludeId } } : {}) },
+  });
   if (hasOverlap(others, data.dayOfWeek, start, end, excludeId)) {
     const clash = others.find((r) => start < toMin(r.endTime) && toMin(r.startTime) < end)!;
-    throw new HttpError(409, `conflito com bloco iniciando às ${minutesToHHMM(toMin(clash.startTime))} (${clash.id})`);
+    throw new HttpError(
+      409,
+      `conflito com bloco iniciando às ${minutesToHHMM(toMin(clash.startTime))} (${clash.id})`,
+    );
   }
 }
 
@@ -35,7 +45,7 @@ scheduleRoutes.get(
       include: SCHEDULE_INCLUDE,
     });
     res.json(rows);
-  })
+  }),
 );
 
 // POST /schedule — cria bloco; com genreId, cria/reaproveita o auto-programa
@@ -43,7 +53,8 @@ scheduleRoutes.post(
   "/",
   wrap(async (req, res) => {
     const data = scheduleCreateSchema.parse(req.body);
-    if (!data.genreId && !data.programId) throw new HttpError(400, "genreId ou programId obrigatório");
+    if (!data.genreId && !data.programId)
+      throw new HttpError(400, "genreId ou programId obrigatório");
 
     let programId = data.programId;
     if (data.genreId) {
@@ -56,18 +67,29 @@ scheduleRoutes.post(
     }
     if (!programId) throw new HttpError(400, "programId inválido");
 
-    await assertScheduleFits({ dayOfWeek: data.dayOfWeek, startTime: data.startTime, endTime: data.endTime });
-
-    const row = await prisma.programSchedule.create({
-      data: { programId, dayOfWeek: data.dayOfWeek, startTime: data.startTime, endTime: data.endTime },
-      include: SCHEDULE_INCLUDE,
-    }).catch((e) => {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
-        throw new HttpError(409, "já existe um bloco idêntico deste programa");
-      throw e;
+    await assertScheduleFits({
+      dayOfWeek: data.dayOfWeek,
+      startTime: data.startTime,
+      endTime: data.endTime,
     });
+
+    const row = await prisma.programSchedule
+      .create({
+        data: {
+          programId,
+          dayOfWeek: data.dayOfWeek,
+          startTime: data.startTime,
+          endTime: data.endTime,
+        },
+        include: SCHEDULE_INCLUDE,
+      })
+      .catch((e) => {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
+          throw new HttpError(409, "já existe um bloco idêntico deste programa");
+        throw e;
+      });
     res.status(201).json(row);
-  })
+  }),
 );
 
 // PATCH /schedule/:id — mover/redimensionar pela timeline; 409 se sobrepõe outro bloco do dia
@@ -85,17 +107,19 @@ scheduleRoutes.patch(
     };
     await assertScheduleFits(next, current.id);
 
-    const row = await prisma.programSchedule.update({
-      where: { id: current.id },
-      data: next,
-      include: SCHEDULE_INCLUDE,
-    }).catch((e) => {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
-        throw new HttpError(409, "já existe um bloco idêntico deste programa");
-      throw e;
-    });
+    const row = await prisma.programSchedule
+      .update({
+        where: { id: current.id },
+        data: next,
+        include: SCHEDULE_INCLUDE,
+      })
+      .catch((e) => {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
+          throw new HttpError(409, "já existe um bloco idêntico deste programa");
+        throw e;
+      });
     res.json(row);
-  })
+  }),
 );
 
 scheduleRoutes.delete(
@@ -103,5 +127,17 @@ scheduleRoutes.delete(
   wrap(async (req, res) => {
     await prisma.programSchedule.delete({ where: { id: req.params.id } });
     res.json({ ok: true });
-  })
+  }),
+);
+
+// DELETE /schedule — limpa a grade atual (remove TODOS os blocos; perfis salvos não são afetados)
+scheduleRoutes.delete(
+  "/",
+  wrap(async (_req, res) => {
+    const removed = await prisma.$transaction(async (tx) => {
+      const n = await tx.programSchedule.deleteMany({});
+      return n.count;
+    });
+    res.json({ ok: true, removed });
+  }),
 );

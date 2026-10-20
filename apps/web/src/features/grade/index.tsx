@@ -532,12 +532,19 @@ export default function Grade() {
             </Button>
           </div>
           <ProfilesMenu
+            gradeCount={rows.length}
             onApplied={(orphans) => {
               sched.resetHistory();
               notify(
                 orphans
                   ? `perfil aplicado — ${orphans} bloco(s) de gênero removido ficará na seleção automática`
                   : "perfil aplicado — grade substituída",
+              );
+            }}
+            onCleared={(removed) => {
+              sched.resetHistory();
+              notify(
+                `grade limpa — ${removed} bloco(s) removido(s) (seleção automática até programar de novo)`,
               );
             }}
           />

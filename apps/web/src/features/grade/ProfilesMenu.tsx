@@ -5,17 +5,21 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, ChevronDown, Trash2 } from "lucide-react";
+import { Bookmark, ChevronDown, Eraser, Trash2 } from "lucide-react";
 import { Badge, Button, Field, Modal } from "../../components/ui";
 import { api, type ScheduleProfileListRow } from "../../lib/api";
 
 interface Props {
   /** chamado após um apply bem-sucedido (grade + histórico local são invalidados) */
   onApplied(orphanBlocks: number): void;
+  /** chamado após limpar a grade atual */
+  onCleared(removed: number): void;
+  /** nº de blocos na grade atual (0 desabilita salvar/limpar) */
+  gradeCount: number;
   disabled?: boolean;
 }
 
-export function ProfilesMenu({ onApplied, disabled }: Props) {
+export function ProfilesMenu({ onApplied, onCleared, gradeCount, disabled }: Props) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [saveModal, setSaveModal] = useState(false);
@@ -43,15 +47,14 @@ export function ProfilesMenu({ onApplied, disabled }: Props) {
     setSaving(true);
     setErr(null);
     try {
-      const rows =
-        await api.get<
-          {
-            dayOfWeek: number;
-            startTime: string;
-            endTime: string;
-            program: { genre: { id: string } | null };
-          }[]
-        >("/schedule");
+      const rows = await api.get<
+        {
+          dayOfWeek: number;
+          startTime: string;
+          endTime: string;
+          program: { genre: { id: string } | null };
+        }[]
+      >("/schedule");
       await api.post("/schedule/profiles", {
         name: name.trim(),
         blocks: rows.map((r) => ({
@@ -98,6 +101,23 @@ export function ProfilesMenu({ onApplied, disabled }: Props) {
     }
   }
 
+  async function clearGrade() {
+    if (
+      !window.confirm(
+        `Remover TODOS os ${gradeCount} bloco${gradeCount === 1 ? "" : "s"} da grade atual? Perfis salvos não são afetados — a grade fica fora do ar (seleção automática 24h) até você programar ou aplicar um perfil.`,
+      )
+    )
+      return;
+    try {
+      const res = await api.del<{ ok: boolean; removed: number }>("/schedule");
+      await qc.invalidateQueries({ queryKey: ["schedule"] });
+      setOpen(false);
+      onCleared(res.removed);
+    } catch (e) {
+      window.alert("Não limpou: " + (e as Error).message);
+    }
+  }
+
   return (
     <div ref={rootRef} className="relative">
       <Button
@@ -117,7 +137,13 @@ export function ProfilesMenu({ onApplied, disabled }: Props) {
       </Button>
       {open && (
         <div className="absolute right-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-muted/20 bg-surface p-2 shadow-xl shadow-black/40 [animation:panel-in_120ms_ease-out]">
-          <Button size="sm" variant="signal" className="w-full" onClick={() => setSaveModal(true)}>
+          <Button
+            size="sm"
+            variant="signal"
+            className="w-full"
+            onClick={() => setSaveModal(true)}
+            disabled={gradeCount === 0}
+          >
             Salvar grade atual como…
           </Button>
           <div className="mt-2 max-h-72 space-y-1 overflow-y-auto">
@@ -159,8 +185,22 @@ export function ProfilesMenu({ onApplied, disabled }: Props) {
               ))
             )}
           </div>
-          <div className="mt-2 border-t border-muted/10 pt-1.5 text-center text-[10px] text-muted">
-            aplicar substitui a grade inteira (vale no próximo tick)
+          <div className="mt-2 border-t border-muted/10 pt-1.5">
+            <Button
+              size="sm"
+              variant="danger"
+              className="w-full"
+              onClick={() => void clearGrade()}
+              disabled={gradeCount === 0}
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                <Eraser size={13} /> Limpar grade atual…
+              </span>
+            </Button>
+            <div className="mt-1 text-center text-[10px] text-muted">
+              salvar só com blocos na grade · aplicar substitui a grade inteira (vale no próximo
+              tick)
+            </div>
           </div>
         </div>
       )}
