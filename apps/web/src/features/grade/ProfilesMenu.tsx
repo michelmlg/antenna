@@ -123,12 +123,13 @@ export function ProfilesMenu({ onApplied, onCleared, gradeCount, disabled }: Pro
       <Button
         size="sm"
         variant="default"
+        className="flex h-8"
         onClick={() => setOpen((v) => !v)}
         disabled={disabled}
         title="Perfis de programação"
       >
         <span className="flex items-center gap-1.5">
-          <Bookmark size={13} /> Perfis{" "}
+          <Bookmark size={14} /> Perfis{" "}
           <ChevronDown
             size={12}
             className={open ? "rotate-180 transition-transform" : "transition-transform"}

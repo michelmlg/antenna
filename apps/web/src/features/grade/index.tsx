@@ -26,7 +26,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { Badge, Button, Card, Spinner } from "../../components/ui";
+import { Button, Card, Spinner } from "../../components/ui";
 import { api, type GenreRow, type PlayoutState, type ScheduleRow } from "../../lib/api";
 import {
   hasOverlap,
@@ -44,6 +44,7 @@ import { useGradeSchedule, type MutationResult, type SchedulePatch } from "./use
 import { DayLane, type Preview } from "./DayLane";
 import { LibraryPanel, firstFreeSlot } from "./LibraryPanel";
 import { BlockModal, type ModalState } from "./BlockModal";
+import { Dropdown } from "./Dropdown";
 import { ProfilesMenu } from "./ProfilesMenu";
 import GradeMobile from "./GradeMobile";
 
@@ -64,14 +65,13 @@ interface DragState {
   dow: number;
   startMin: number;
   endMin: number;
-  grabMin: number;
   startX: number;
   startY: number;
   moved: boolean;
 }
 
 type Zoom = "auto" | number;
-const ZOOM_STEPS: number[] = [0.35, 0.75, 1.5, 3, 5];
+const ZOOM_STEPS: number[] = [0.35, 0.5, 0.75, 1, 1.5, 2, 3, 4, 5];
 
 /** Modifier do dnd-kit: ancora o chip arrastado com a BORDA ESQUERDA no cursor
  * (o bloco cai com o início onde você aponta — chip e ghost ficam alinhados) e
@@ -88,6 +88,32 @@ const anchorOnCursor: Modifier = ({ draggingNodeRect, transform, activatorEvent 
     y: curY - (draggingNodeRect.top + draggingNodeRect.height / 2),
   };
 };
+
+/** pill da toolbar — mesma altura (h-8) de todos os controles da barra */
+function ToolbarPill({
+  tone,
+  text,
+  pulse,
+}: {
+  tone: "muted" | "signal" | "green" | "red";
+  text: string;
+  pulse?: boolean;
+}) {
+  const tones = {
+    muted: "border-muted/10 bg-surface text-muted",
+    signal: "border-signal/30 bg-signal/10 text-signal",
+    green: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+    red: "border-danger/30 bg-danger/10 text-danger",
+  };
+  return (
+    <div
+      className={`flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-[11px] font-medium ${tones[tone]}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full bg-current ${pulse ? "animate-pulse" : ""}`} />
+      {text}
+    </div>
+  );
+}
 
 export default function Grade() {
   const sched = useGradeSchedule();
@@ -230,8 +256,6 @@ export default function Grade() {
         dow: row.dayOfWeek,
         startMin: toMin(row.startTime),
         endMin: toMin(row.endTime),
-        grabMin:
-          mode === "move" ? toMin(row.startTime) - cursorMinute(e.clientX, trackLeft(), px) : 0,
         startX: e.clientX,
         startY: e.clientY,
         moved: false,
@@ -257,8 +281,9 @@ export default function Grade() {
       let start: number;
       let end: number;
       if (d.mode === "move") {
+        // mesma regra da biblioteca: o INÍCIO do bloco vai ao cursor (WYSIWYG)
         const dur = d.endMin - d.startMin;
-        start = Math.min(1440 - dur, Math.max(0, snapMinutes(cur - d.grabMin)));
+        start = Math.min(1440 - dur, Math.max(0, snapMinutes(cur)));
         end = start + dur;
       } else if (d.mode === "right") {
         start = d.startMin;
@@ -442,21 +467,45 @@ export default function Grade() {
 
   // ---- navegação / zoom ----
   const laneNames = useMemo(() => DOWS.map(([, full]) => full), []);
+  const [gotoLabel, setGotoLabel] = useState<string | null>(null);
   const gotoDay = (dowStr: string) => {
     const dow = Number(dowStr);
+    setGotoLabel(laneNames[dow]);
     const el = tracksRef.current[dow];
     const sc = scrollerRef.current;
     if (el && sc) sc.scrollTo({ top: el.offsetTop - 34, behavior: "smooth" });
   };
 
+  // ---- zoom: escada de degraus (auto incluído) com âncora no centro da janela ----
+  // auto (~0.9) não é um degrau: ações sempre andam degrau a degrau e param nas pontas,
+  // em vez de saltar (antes: menos-zoom no mínimo voltava pro auto, que AUMENTAVA o zoom)
+  const anchorMin = useRef<number | null>(null);
+  const changeZoomRaw = (next: Zoom) => {
+    const sc = scrollerRef.current;
+    if (sc && sc.clientWidth)
+      anchorMin.current = (sc.scrollLeft + sc.clientWidth / 2 - LABEL_W) / px;
+    setZoom(next);
+  };
   const zoomIn = () => {
-    const next = ZOOM_STEPS.find((z) => z > px - 0.01) ?? ZOOM_STEPS[ZOOM_STEPS.length - 1];
-    setZoom(clampedPx(next));
+    const next = ZOOM_STEPS.find((z) => z > px + 0.01);
+    if (!next) return; // teto
+    changeZoomRaw(clampedPx(next));
   };
   const zoomOut = () => {
-    const prev = [...ZOOM_STEPS].reverse().find((z) => z < px + 0.01);
-    setZoom(prev ? clampedPx(prev) : "auto");
+    const prev = [...ZOOM_STEPS].reverse().find((z) => z < px - 0.01);
+    if (!prev) return; // piso
+    changeZoomRaw(clampedPx(prev));
   };
+  const atCeiling = !ZOOM_STEPS.some((z) => z > px + 0.01);
+  const atFloor = !ZOOM_STEPS.some((z) => z < px - 0.01);
+  useEffect(() => {
+    const m = anchorMin.current;
+    if (m == null) return;
+    anchorMin.current = null;
+    const sc = scrollerRef.current;
+    if (!sc) return;
+    sc.scrollLeft = Math.max(0, m * px + LABEL_W - sc.clientWidth / 2);
+  }, [px]);
 
   const byDay = DOWS.map((_, dow) =>
     rows.filter((r) => r.dayOfWeek === dow).sort((a, b) => toMin(a.startTime) - toMin(b.startTime)),
@@ -472,21 +521,15 @@ export default function Grade() {
   }, []);
 
   const pill = sched.saving ? (
-    <Badge tone="signal">
-      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" /> salvando…
-    </Badge>
+    <ToolbarPill tone="signal" pulse text="salvando…" />
   ) : sched.status.kind === "error" ? (
     <span title={sched.status.msg ?? "falha ao salvar"}>
-      <Badge tone="red">
-        <span className="h-1.5 w-1.5 rounded-full bg-current" /> falhou (desfeito)
-      </Badge>
+      <ToolbarPill tone="red" text="falhou (desfeito)" />
     </span>
   ) : sched.status.kind === "ok" ? (
-    <Badge tone="green">
-      <span className="h-1.5 w-1.5 rounded-full bg-current" /> salvo
-    </Badge>
+    <ToolbarPill tone="green" text="salvo" />
   ) : (
-    <Badge tone="muted">sem alterações</Badge>
+    <ToolbarPill tone="muted" text="sem alterações" />
   );
 
   if (isMobile) return <GradeMobile />;
@@ -502,33 +545,31 @@ export default function Grade() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {toast && (
-            <Badge tone="green">
-              <span className="h-1.5 w-1.5 rounded-full bg-current" /> {toast}
-            </Badge>
-          )}
+          {toast && <ToolbarPill tone="green" text={toast} />}
           {pill}
           <div
-            className="flex items-center gap-0.5 rounded-lg border border-muted/10 bg-surface p-0.5 shadow-sm shadow-black/10"
+            className="flex h-8 items-center gap-0.5 rounded-lg border border-muted/10 bg-surface p-1 shadow-sm shadow-black/10"
             title="Desfazer (Ctrl+Z) / Refazer (Ctrl+Y)"
           >
             <Button
               size="sm"
               variant="ghost"
+              className="h-6 px-1.5"
               onClick={() => void sched.undo()}
               disabled={sched.saving}
               title="Desfazer (Ctrl+Z)"
             >
-              <Undo2 size={14} />
+              <Undo2 size={15} />
             </Button>
             <Button
               size="sm"
               variant="ghost"
+              className="h-6 px-1.5"
               onClick={() => void sched.redo()}
               disabled={sched.saving}
               title="Refazer (Ctrl+Y)"
             >
-              <Redo2 size={14} />
+              <Redo2 size={15} />
             </Button>
           </div>
           <ProfilesMenu
@@ -549,65 +590,74 @@ export default function Grade() {
             }}
           />
           <div
-            className="flex items-center gap-0.5 rounded-lg border border-muted/10 bg-surface p-0.5 shadow-sm shadow-black/10"
+            className="flex h-8 items-center gap-0.5 rounded-lg border border-muted/10 bg-surface p-1 shadow-sm shadow-black/10"
             title="Zoom da timeline"
           >
-            <Button size="sm" variant="ghost" onClick={zoomOut} title="Menos zoom">
-              <ZoomOut size={14} />
-            </Button>
-            <select
-              id="grade-zoom"
-              name="grade-zoom"
-              value={String(zoom)}
-              onChange={(e) => setZoom(e.target.value === "auto" ? "auto" : Number(e.target.value))}
-              className="border-0 bg-transparent text-xs"
-              title="Zoom"
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-1.5"
+              onClick={zoomOut}
+              disabled={atFloor}
+              title="Menos zoom"
             >
-              <option value="auto">auto</option>
-              {ZOOM_STEPS.map((z) => (
-                <option key={z} value={z}>
-                  {String(z)}
-                </option>
-              ))}
-            </select>
-            <Button size="sm" variant="ghost" onClick={zoomIn} title="Mais zoom">
-              <ZoomIn size={14} />
+              <ZoomOut size={15} />
+            </Button>
+            <Dropdown
+              trigger={
+                <span className="min-w-9 text-center font-mono">
+                  {zoom === "auto" ? "auto" : String(zoom)}
+                </span>
+              }
+              options={[
+                { value: "auto", label: "auto" },
+                ...ZOOM_STEPS.map((z) => ({ value: String(z), label: String(z) })),
+              ]}
+              activeValue={String(zoom)}
+              onSelect={(v) =>
+                v === "auto" ? changeZoomRaw("auto") : changeZoomRaw(clampedPx(Number(v)))
+              }
+              title="Zoom da timeline (px por minuto)"
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-1.5"
+              onClick={zoomIn}
+              disabled={atCeiling}
+              title="Mais zoom"
+            >
+              <ZoomIn size={15} />
             </Button>
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setZoom("auto")}
+              className={"h-6 px-1.5 " + (zoom === "auto" ? "text-signal" : "")}
+              onClick={() => changeZoomRaw("auto")}
               title="Ajustar a semana inteira na tela (auto)"
-              className={zoom === "auto" ? "text-signal" : ""}
             >
-              <Maximize size={14} />
+              <Maximize size={15} />
             </Button>
           </div>
-          <div className="flex items-center gap-1 rounded-lg border border-muted/10 bg-surface px-2 py-1 shadow-sm shadow-black/10">
-            <CalendarDays size={13} className="text-muted" />
-            <select
-              id="grade-goto"
-              name="grade-goto"
-              onChange={(e) => e.target.value && gotoDay(e.target.value)}
-              className="border-0 bg-transparent p-0 text-xs"
-              defaultValue=""
-              title="Ir para o dia"
-            >
-              <option value="">ir p/ dia…</option>
-              {laneNames.map((n, i) => (
-                <option key={i} value={i}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Dropdown
+            trigger={
+              <>
+                <CalendarDays size={14} className="text-muted" />
+                <span className="text-muted">{gotoLabel ?? "ir p/ dia…"}</span>
+              </>
+            }
+            options={laneNames.map((n, i) => ({ value: String(i), label: n }))}
+            onSelect={(v) => gotoDay(v)}
+            title="Ir para o dia"
+          />
           <Button
             variant="signal"
+            className="flex h-8 items-center"
             onClick={() => setModal({ dow: now.dow })}
             title="Programar bloco (N)"
           >
             <span className="flex items-center gap-1.5">
-              <Plus size={14} /> Programar
+              <Plus size={15} /> Programar
             </span>
           </Button>
         </div>
