@@ -1,7 +1,14 @@
 /** No Ar — LivePlayer, agora tocando, fila estável (thumbs/gênero/canal/link), Pular. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Play, SkipForward } from "lucide-react";
-import { api, type HistoryRow, type PlayoutState, type QueueItemView, type ScheduleRow, type StreamInfo } from "../lib/api";
+import {
+  api,
+  type HistoryRow,
+  type PlayoutState,
+  type QueueItemView,
+  type ScheduleRow,
+  type StreamInfo,
+} from "../lib/api";
 import { Badge, Button, Card, Empty, ErrorMsg, Spinner, fmtDur } from "../components/ui";
 import { LivePlayer } from "../components/LivePlayer";
 import { GenreIcon } from "../lib/icons";
@@ -22,13 +29,23 @@ function Progress({ startedAt, duration }: { startedAt: string; duration: number
       </div>
       <div className="mt-1 flex justify-between text-[11px] text-muted">
         <span>{fmtDur(elapsed)}</span>
-        <span>{duration > 0 ? `-${fmtDur(Math.max(0, duration - elapsed))}` : "duração desconhecida"}</span>
+        <span>
+          {duration > 0 ? `-${fmtDur(Math.max(0, duration - elapsed))}` : "duração desconhecida"}
+        </span>
       </div>
     </div>
   );
 }
 
-function QueueList({ items, program, onPlay }: { items: QueueItemView[]; program: string | null; onPlay?: (mediaId: string) => void }) {
+function QueueList({
+  items,
+  program,
+  onPlay,
+}: {
+  items: QueueItemView[];
+  program: string | null;
+  onPlay?: (mediaId: string) => void;
+}) {
   if (!items.length) return <Empty>fila vazia — gerando a próxima sequência…</Empty>;
   return (
     <ol className="space-y-2">
@@ -36,10 +53,18 @@ function QueueList({ items, program, onPlay }: { items: QueueItemView[]; program
         const thumb = thumbOf(it);
         const isYT = it.source === "youtube";
         return (
-          <li key={`${it.mediaId}-${i}`} className="flex items-center gap-2.5 rounded border border-muted/10 bg-background/40 p-2">
+          <li
+            key={`${it.mediaId}-${i}`}
+            className="flex items-center gap-2.5 rounded border border-muted/10 bg-background/40 p-2"
+          >
             <span className="w-5 text-center font-mono text-xs text-muted">{i + 1}</span>
             {thumb ? (
-              <img src={thumb} alt="" loading="lazy" className="h-10 w-[71px] shrink-0 rounded object-cover" />
+              <img
+                src={thumb}
+                alt=""
+                loading="lazy"
+                className="h-10 w-[71px] shrink-0 rounded object-cover"
+              />
             ) : (
               <div className="flex h-10 w-[71px] shrink-0 items-center justify-center rounded bg-muted/10 text-[10px] text-muted">
                 {it.source}
@@ -56,7 +81,9 @@ function QueueList({ items, program, onPlay }: { items: QueueItemView[]; program
                     <GenreIcon name={it.genre.icon} size={10} /> {it.genre.name}
                   </span>
                 )}
-                {it.channelTitle && <span className="text-[11px] text-muted">{it.channelTitle}</span>}
+                {it.channelTitle && (
+                  <span className="text-[11px] text-muted">{it.channelTitle}</span>
+                )}
                 <span className="text-[11px] text-muted">{fmtDur(it.duration)}</span>
               </div>
             </div>
@@ -85,7 +112,9 @@ function QueueList({ items, program, onPlay }: { items: QueueItemView[]; program
         );
       })}
       {program && (
-        <li className="pt-1 text-right text-[11px] text-muted">bloco: {program} · a fila muda só com Pular ou troca de bloco</li>
+        <li className="pt-1 text-right text-[11px] text-muted">
+          bloco: {program} · a fila muda só com Pular ou troca de bloco
+        </li>
       )}
     </ol>
   );
@@ -97,8 +126,14 @@ export default function NoAr() {
     queryFn: () => api.get<PlayoutState>("/playout/state"),
     refetchInterval: 5000,
   });
-  const { data: stream } = useQuery({ queryKey: ["stream"], queryFn: () => api.get<StreamInfo>("/stream") });
-  const { data: schedule } = useQuery({ queryKey: ["schedule"], queryFn: () => api.get<ScheduleRow[]>("/schedule") });
+  const { data: stream } = useQuery({
+    queryKey: ["stream"],
+    queryFn: () => api.get<StreamInfo>("/stream"),
+  });
+  const { data: schedule } = useQuery({
+    queryKey: ["schedule"],
+    queryFn: () => api.get<ScheduleRow[]>("/schedule"),
+  });
 
   const start = useMutation({ mutationFn: () => api.post("/playout/start") });
   const stop = useMutation({ mutationFn: () => api.post("/playout/stop") });
@@ -132,13 +167,19 @@ export default function NoAr() {
       {/* agora + controles + fila */}
       <Card>
         <div className="mb-2 flex items-center gap-2">
-          {cur ? <Badge tone="signal">NO AR</Badge> : <Badge>{state?.running ? "sintonizando…" : "parado"}</Badge>}
+          {cur ? (
+            <Badge tone="signal">NO AR</Badge>
+          ) : (
+            <Badge>{state?.running ? "sintonizando…" : "parado"}</Badge>
+          )}
           {cur?.programName && <span className="text-xs text-signal">{cur.programName}</span>}
           {cur?.isFallback && <Badge tone="red">fallback</Badge>}
         </div>
         <h2 className="line-clamp-2 text-lg font-semibold leading-snug">{cur ? cur.title : "—"}</h2>
         {cur && <Progress startedAt={cur.startedAt} duration={cur.duration} />}
-        {state?.lastError && <p className="mt-2 line-clamp-2 text-[11px] text-red-400">⚠ {state.lastError}</p>}
+        {state?.lastError && (
+          <p className="mt-2 line-clamp-2 text-[11px] text-danger">⚠ {state.lastError}</p>
+        )}
 
         <div className="mt-4 flex gap-2">
           <Button variant="signal" onClick={() => start.mutate()} disabled={!!state?.running}>
@@ -147,7 +188,11 @@ export default function NoAr() {
           <Button onClick={() => stop.mutate()} disabled={!state?.running}>
             Parar
           </Button>
-          <Button onClick={() => skip.mutate()} disabled={!state?.running} title="Pular para o próximo da fila">
+          <Button
+            onClick={() => skip.mutate()}
+            disabled={!state?.running}
+            title="Pular para o próximo da fila"
+          >
             <span className="flex items-center gap-1.5">
               <SkipForward size={14} /> Pular
             </span>
@@ -159,14 +204,20 @@ export default function NoAr() {
           Próximos na programação
         </div>
         <div className="mt-2">
-          <QueueList items={state?.queue ?? []} program={cur?.programName ?? state?.next?.program ?? null} onPlay={(id) => play.mutate(id)} />
+          <QueueList
+            items={state?.queue ?? []}
+            program={cur?.programName ?? state?.next?.program ?? null}
+            onPlay={(id) => play.mutate(id)}
+          />
         </div>
         <ErrorMsg error={play.error} />
       </Card>
 
       {/* grade de hoje */}
       <Card>
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Programação de hoje</div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+          Programação de hoje
+        </div>
         {today.length === 0 ? (
           <Empty>sem blocos hoje — seleção automática</Empty>
         ) : (
@@ -190,13 +241,17 @@ export default function NoAr() {
 
       {/* últimos exibidos */}
       <Card className="xl:col-span-2">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Últimos exibidos</div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+          Últimos exibidos
+        </div>
         <RecentHistory />
       </Card>
 
       {/* diagnóstico */}
       <Card>
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Diagnóstico</div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+          Diagnóstico
+        </div>
         <dl className="space-y-1.5 text-sm">
           <div className="flex justify-between">
             <dt className="text-muted">worker</dt>
@@ -241,7 +296,10 @@ function RecentHistory() {
               {h.result === "fallback" && <Badge>fallback</Badge>}
             </td>
             <td className="py-1.5 text-right font-mono text-xs text-muted">
-              {new Date(h.startedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+              {new Date(h.startedAt).toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </td>
           </tr>
         ))}

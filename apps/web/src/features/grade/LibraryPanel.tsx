@@ -18,7 +18,7 @@ export function firstFreeSlot(
   rows: ScheduleRow[],
   dow: number,
   durMin: number,
-  preferStart: number
+  preferStart: number,
 ): { start: number; end: number } | null {
   const sorted = rows
     .filter((r) => r.dayOfWeek === dow)
@@ -51,10 +51,15 @@ export function LibraryPanel({ open, onToggle, onNewBlock }: Props) {
     const v = parseInt(localStorage.getItem(LIB_W_KEY) || "", 10);
     return Number.isFinite(v) ? Math.min(LIB_MAX, Math.max(LIB_MIN, v)) : 208;
   });
-  const { data: genres } = useQuery({ queryKey: ["genres"], queryFn: () => api.get<GenreRow[]>("/genres") });
+  const { data: genres } = useQuery({
+    queryKey: ["genres"],
+    queryFn: () => api.get<GenreRow[]>("/genres"),
+  });
 
   const filtered = useMemo(() => {
-    return (genres ?? []).filter((g) => !search || g.name.toLowerCase().includes(search.toLowerCase()));
+    return (genres ?? []).filter(
+      (g) => !search || g.name.toLowerCase().includes(search.toLowerCase()),
+    );
   }, [genres, search]);
 
   return (
@@ -72,7 +77,12 @@ export function LibraryPanel({ open, onToggle, onNewBlock }: Props) {
             const parent = (e.currentTarget as HTMLElement).parentElement;
             if (!parent) return;
             const onMove = (ev: PointerEvent) => {
-              setWidth(Math.min(LIB_MAX, Math.max(LIB_MIN, ev.clientX - parent.getBoundingClientRect().left)));
+              setWidth(
+                Math.min(
+                  LIB_MAX,
+                  Math.max(LIB_MIN, ev.clientX - parent.getBoundingClientRect().left),
+                ),
+              );
             };
             const onUp = () => {
               document.removeEventListener("pointermove", onMove, true);
@@ -88,8 +98,17 @@ export function LibraryPanel({ open, onToggle, onNewBlock }: Props) {
         />
       )}
       <div className="flex items-center justify-between p-1.5">
-        {open && <span className="px-1 text-[11px] font-bold uppercase tracking-wide text-muted">Biblioteca</span>}
-        <Button size="sm" variant="ghost" onClick={onToggle} title={open ? "Recolher" : "Expandir biblioteca"}>
+        {open && (
+          <span className="px-1 text-[11px] font-bold uppercase tracking-wide text-muted">
+            Biblioteca
+          </span>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onToggle}
+          title={open ? "Recolher" : "Expandir biblioteca"}
+        >
           {open ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </Button>
       </div>
@@ -98,6 +117,8 @@ export function LibraryPanel({ open, onToggle, onNewBlock }: Props) {
           <div className="relative">
             <Search size={12} className="absolute left-2 top-2.5 text-muted" />
             <input
+              id="lib-search"
+              name="lib-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="buscar gênero…"
@@ -149,8 +170,14 @@ function LibItem({ genre }: { genre: GenreRow }) {
         <span className="truncate text-xs font-medium">{genre.name}</span>
       </div>
       <div className="mt-0.5 flex items-center justify-between text-[10px] text-muted">
-        <span className="truncate">{videos} vídeo{videos === 1 ? "" : "s"}</span>
-        {genre.status === "pausado" ? <Badge tone="red">pausado</Badge> : <Badge tone="muted">auto</Badge>}
+        <span className="truncate">
+          {videos} vídeo{videos === 1 ? "" : "s"}
+        </span>
+        {genre.status === "pausado" ? (
+          <Badge tone="red">pausado</Badge>
+        ) : (
+          <Badge tone="muted">auto</Badge>
+        )}
       </div>
     </div>
   );

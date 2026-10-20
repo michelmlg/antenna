@@ -25,6 +25,9 @@ interface HistOp {
 
 export type Status = { kind: "idle" | "saving" | "ok" | "error"; msg?: string };
 
+/** Resultado de mutation: `true` = gravou; `string` = motivo da falha (mensagem da API). */
+export type MutationResult = true | string;
+
 function scheduleBody(row: ScheduleRow): SchedulePatch {
   return { dayOfWeek: row.dayOfWeek, startTime: row.startTime, endTime: row.endTime };
 }
@@ -48,11 +51,11 @@ export function useGradeSchedule() {
     (fn: (prev: ScheduleRow[]) => ScheduleRow[]) => {
       qc.setQueryData<ScheduleRow[]>(["schedule"], (prev) => fn(prev ?? []));
     },
-    [qc]
+    [qc],
   );
 
   const track = useCallback(
-    async (fn: () => Promise<unknown>): Promise<boolean> => {
+    async (fn: () => Promise<unknown>): Promise<MutationResult> => {
       pendingRef.current++;
       setSaving(true);
       setStatus({ kind: "saving" });
@@ -62,15 +65,16 @@ export function useGradeSchedule() {
         setStatus({ kind: "ok" });
         return true;
       } catch (e) {
-        setStatus({ kind: "error", msg: (e as Error).message });
+        const msg = (e as Error).message || "falhou";
+        setStatus({ kind: "error", msg });
         await qc.invalidateQueries({ queryKey: ["schedule"] }); // rollback visual
-        return false;
+        return msg;
       } finally {
         pendingRef.current--;
         if (pendingRef.current <= 0) setSaving(false);
       }
     },
-    [qc]
+    [qc],
   );
 
   // dentro de undo/redo, replay não empilha história de novo
@@ -78,42 +82,55 @@ export function useGradeSchedule() {
 
   /** mover/redimensionar um bloco (drag, alças ou modal). */
   const updateBlock = useCallback(
-    async (id: string, patch: SchedulePatch): Promise<boolean> => {
+    async (id: string, patch: SchedulePatch): Promise<MutationResult> => {
       const prev = (qc.getQueryData<ScheduleRow[]>(["schedule"]) ?? []).find((r) => r.id === id);
-      if (!prev) return false;
+      if (!prev) return "bloco não encontrado";
       setRows((all) => all.map((r) => (r.id === id ? { ...r, ...patch } : r))); // optimistic
-      const ok = await track(() => api.patch<ScheduleRow>(`/schedule/${id}`, patch));
-      if (ok && !replayingRef.current)
-        setUndoStack((s) => [...s.slice(-29), { kind: "update", before: prev, after: { ...prev, ...patch } }]);
-      return ok;
+      const result = await track(() => api.patch<ScheduleRow>(`/schedule/${id}`, patch));
+      if (result === true && !replayingRef.current)
+        setUndoStack((s) => [
+          ...s.slice(-29),
+          { kind: "update", before: prev, after: { ...prev, ...patch } },
+        ]);
+      return result;
     },
-    [qc, setRows, track]
+    [qc, setRows, track],
   );
 
   /** criar bloco (biblioteca, duplicar ou modal). */
   const addBlock = useCallback(
-    async (body: { genreId?: string; programId?: string; dayOfWeek: number; startTime: string; endTime: string }): Promise<boolean> => {
-      const ok = await track(() => api.post<ScheduleRow>("/schedule", body));
-      return ok;
+    async (body: {
+      genreId?: string;
+      programId?: string;
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+    }): Promise<MutationResult> => {
+      return track(() => api.post<ScheduleRow>("/schedule", body));
     },
-    [track]
+    [track],
   );
 
   const deleteBlock = useCallback(
-    async (row: ScheduleRow): Promise<boolean> => {
+    async (row: ScheduleRow): Promise<MutationResult> => {
       setRows((all) => all.filter((r) => r.id !== row.id)); // optimistic
-      const ok = await track(() => api.del(`/schedule/${row.id}`));
-      if (ok && !replayingRef.current)
+      const result = await track(() => api.del(`/schedule/${row.id}`));
+      if (result === true && !replayingRef.current)
         setUndoStack((s) => [...s.slice(-29), { kind: "delete", before: row, serverId: row.id }]);
-      return ok;
+      return result;
     },
-    [setRows, track]
+    [setRows, track],
   );
 
   const doCreate = useCallback(
-    (body: { genreId?: string; programId?: string; dayOfWeek: number; startTime: string; endTime: string }) =>
-      api.post<ScheduleRow>("/schedule", body),
-    []
+    (body: {
+      genreId?: string;
+      programId?: string;
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+    }) => api.post<ScheduleRow>("/schedule", body),
+    [],
   );
 
   const undoOp = useCallback(async () => {
@@ -121,11 +138,15 @@ export function useGradeSchedule() {
     if (!op) return;
     replayingRef.current = true;
     try {
-      if (op.kind === "update") await api.patch(`/schedule/${op.before!.id}`, scheduleBody(op.before!));
+      if (op.kind === "update")
+        await api.patch(`/schedule/${op.before!.id}`, scheduleBody(op.before!));
       else if (op.kind === "create") await api.del(`/schedule/${op.after!.id}`);
       else {
         // recria vinculado ao mesmo programa (POST sem vínculo daria 400)
-        const created = await doCreate({ programId: op.before!.program.id, ...scheduleBody(op.before!) });
+        const created = await doCreate({
+          programId: op.before!.program.id,
+          ...scheduleBody(op.before!),
+        });
         op.serverId = created.id;
       }
       await qc.invalidateQueries({ queryKey: ["schedule"] });
@@ -145,10 +166,14 @@ export function useGradeSchedule() {
     if (!op) return;
     replayingRef.current = true;
     try {
-      if (op.kind === "update") await api.patch(`/schedule/${op.before!.id}`, scheduleBody(op.after!));
+      if (op.kind === "update")
+        await api.patch(`/schedule/${op.before!.id}`, scheduleBody(op.after!));
       else if (op.kind === "create") {
         // recria vinculado ao mesmo programa (POST sem vínculo daria 400)
-        const created = await doCreate({ programId: op.after!.program.id, ...scheduleBody(op.after!) });
+        const created = await doCreate({
+          programId: op.after!.program.id,
+          ...scheduleBody(op.after!),
+        });
         op.after = created;
       } else await api.del(`/schedule/${op.serverId ?? op.before!.id}`);
       await qc.invalidateQueries({ queryKey: ["schedule"] });
@@ -175,4 +200,3 @@ export function useGradeSchedule() {
     redo: redoOp,
   };
 }
-

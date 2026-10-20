@@ -11,9 +11,8 @@ export const DOWS = [
   ["Sáb", "Sábado"],
 ] as const;
 
-export const LABEL_W = 64; // coluna de dias
+export const LABEL_W = 80; // coluna de dias (cabe "DOMINGO" uppercase)
 export const LANE_H = 64;
-export const MIN_BLOCK_W = 5; // largura visual mínima de bloco tratada pelo core (5 min)
 
 /** Zoom "auto": a semana inteira (1440 min) cabe na largura útil da viewport. */
 export function pxPerMinAuto(displayWidth: number): number {
@@ -27,17 +26,13 @@ export function cursorMinute(clientX: number, trackLeft: number, px: number): nu
   return Math.min(1440, Math.max(0, snapMinutes(Math.round((clientX - trackLeft) / px))));
 }
 
-/** Posição de teste de um range sobre as linhas do dia (conflito + limites). */
-export function blockRect(
-  row: { startTime: string; endTime: string },
-  px: number
-): { left: number; width: number } {
-  const start = toMin(row.startTime);
-  const end = toMin(row.endTime);
-  return { left: start * px, width: Math.max(MIN_DURATION * px * 0.9, (end - start) * px - 2) };
-}
-
-export { hasOverlap, MIN_DURATION, minutesToHHMM, snapMinutes, toMin } from "@antenna/core/schedule";
+export {
+  hasOverlap,
+  MIN_DURATION,
+  minutesToHHMM,
+  snapMinutes,
+  toMin,
+} from "@antenna/core/schedule";
 export const durLabel = (min: number): string => {
   const h = Math.floor(min / 60);
   const m = min - h * 60;

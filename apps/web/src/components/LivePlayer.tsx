@@ -55,7 +55,10 @@ export function LivePlayer({
       hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-      hls.on(Hls.Events.FRAG_BUFFERED, () => !destroyed && setState((s) => (s === "connecting" ? "live" : s)));
+      hls.on(
+        Hls.Events.FRAG_BUFFERED,
+        () => !destroyed && setState((s) => (s === "connecting" ? "live" : s)),
+      );
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = src;
       video.play().catch(() => {});
@@ -96,7 +99,9 @@ export function LivePlayer({
   const fullscreen = () => {
     const el = frameRef.current;
     if (!el) return;
-    document.fullscreenElement ? document.exitFullscreen().catch(() => {}) : el.requestFullscreen().catch(() => {});
+    document.fullscreenElement
+      ? document.exitFullscreen().catch(() => {})
+      : el.requestFullscreen().catch(() => {});
   };
   const toggleMute = () => {
     const v = videoRef.current;
@@ -111,9 +116,13 @@ export function LivePlayer({
         <i className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-background" /> AO VIVO
       </span>
     ) : state === "stalled" ? (
-      <span className="rounded bg-red-500/90 px-2 py-0.5 text-[11px] font-bold text-white">RECONECTANDO…</span>
+      <span className="rounded bg-danger/90 px-2 py-0.5 text-[11px] font-bold text-white">
+        RECONECTANDO…
+      </span>
     ) : state === "offline" ? (
-      <span className="rounded bg-muted/60 px-2 py-0.5 text-[11px] font-bold text-background">OFFLINE</span>
+      <span className="rounded bg-muted/60 px-2 py-0.5 text-[11px] font-bold text-background">
+        OFFLINE
+      </span>
     ) : null;
 
   return (
@@ -123,15 +132,16 @@ export function LivePlayer({
       onMouseMove={() => {
         setShowCtrl(true);
         clearTimeout((frameRef.current as HTMLElement & { __t?: number }).__t);
-        (frameRef.current as HTMLElement & { __t?: number }).__t = window.setTimeout(() => setShowCtrl(false), 2500);
+        (frameRef.current as HTMLElement & { __t?: number }).__t = window.setTimeout(
+          () => setShowCtrl(false),
+          2500,
+        );
       }}
     >
       <video ref={videoRef} playsInline muted={muted} autoPlay className="h-full w-full" />
 
       {/* banner + controles */}
-      <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">
-        {banner}
-      </div>
+      <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">{banner}</div>
       <div
         className={`absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity ${showCtrl ? "opacity-100" : "opacity-0"}`}
       >
@@ -154,7 +164,9 @@ export function LivePlayer({
           {state === "offline" ? (
             <p className="text-sm text-muted">{offlineLabel}</p>
           ) : (
-            <Loader label={state === "stalled" ? "reconectando ao canal…" : "conectando ao canal…"} />
+            <Loader
+              label={state === "stalled" ? "reconectando ao canal…" : "conectando ao canal…"}
+            />
           )}
         </div>
       )}
@@ -162,7 +174,15 @@ export function LivePlayer({
   );
 }
 
-function PlayerBtn({ children, label, onClick }: { children: React.ReactNode; label: string; onClick: () => void }) {
+function PlayerBtn({
+  children,
+  label,
+  onClick,
+}: {
+  children: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
   return (
     <button
       title={label}

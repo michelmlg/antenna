@@ -1,30 +1,53 @@
 /** Fontes do gênero: barra de adição, bloco por fonte com CRUD de vídeos (grid de thumbs) e filtros. */
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, MonitorPlay, Pause, Play, RefreshCw, Search, SlidersHorizontal, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  MonitorPlay,
+  Pause,
+  Play,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+} from "lucide-react";
 import { api, type MediaLite, type SourceRow } from "../lib/api";
-import { Badge, Button, Card, Empty, ErrorMsg, Field, Modal, Spinner, fmtDur } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  ErrorMsg,
+  Field,
+  Modal,
+  Spinner,
+  fmtDur,
+} from "../components/ui";
 
 // ---------- helpers ----------
-export function thumbOfMedia(m: { thumbnailUrl: string | null; resolvedId?: string | null }): string | null {
+export function thumbOfMedia(m: {
+  thumbnailUrl: string | null;
+  resolvedId?: string | null;
+}): string | null {
   if (m.thumbnailUrl) return m.thumbnailUrl;
   if (m.resolvedId) return `https://i.ytimg.com/vi/${m.resolvedId}/mqdefault.jpg`;
   return null;
 }
 
 // ---------- grid de vídeos (CRUD inline) ----------
-function MediaCard({
-  m,
-  onDelete,
-}: {
-  m: MediaLite & { status: string };
-  onDelete?: () => void;
-}) {
+function MediaCard({ m, onDelete }: { m: MediaLite & { status: string }; onDelete?: () => void }) {
   const thumb = thumbOfMedia(m);
   return (
-    <div className={`group relative overflow-hidden rounded border border-muted/10 bg-background/40 ${m.status === "inativo" ? "opacity-45" : ""}`}>
+    <div
+      className={`group relative overflow-hidden rounded border border-muted/10 bg-background/40 ${m.status === "inativo" ? "opacity-45" : ""}`}
+    >
       <img src={thumb ?? ""} alt="" loading="lazy" className="aspect-video w-full object-cover" />
-      {!thumb && <div className="flex aspect-video items-center justify-center bg-muted/10 text-[10px] text-muted">{m.source}</div>}
+      {!thumb && (
+        <div className="flex aspect-video items-center justify-center bg-muted/10 text-[10px] text-muted">
+          {m.source}
+        </div>
+      )}
       <div className="p-1.5">
         <div className="line-clamp-2 text-[11px] leading-tight">{m.title}</div>
         <div className="mt-1 flex items-center justify-between text-[10px] text-muted">
@@ -35,7 +58,12 @@ function MediaCard({
       {/* ação no hover: apagar de vez */}
       <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/70 opacity-0 transition-opacity group-hover:opacity-100">
         {onDelete && (
-          <Button size="sm" variant="danger" onClick={onDelete} title="Apagar de vez (o vídeo sai da biblioteca)">
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={onDelete}
+            title="Apagar de vez (o vídeo sai da biblioteca)"
+          >
             <Trash2 size={13} />
           </Button>
         )}
@@ -44,12 +72,23 @@ function MediaCard({
   );
 }
 
-export function SourceMediaGrid({ genreId, sid, manual }: { genreId: string; sid: string; manual?: (MediaLite & { itemId: string })[] }) {
+export function SourceMediaGrid({
+  genreId,
+  sid,
+  manual,
+}: {
+  genreId: string;
+  sid: string;
+  manual?: (MediaLite & { itemId: string })[];
+}) {
   const qc = useQueryClient();
   const [take, setTake] = useState(12);
   const { data } = useQuery({
     queryKey: ["source-media", genreId, sid],
-    queryFn: () => api.get<{ items: (MediaLite & { status: string })[] }>(`/genres/${genreId}/sources/${sid}/media`),
+    queryFn: () =>
+      api.get<{ items: (MediaLite & { status: string })[] }>(
+        `/genres/${genreId}/sources/${sid}/media`,
+      ),
     enabled: !manual,
   });
 
@@ -72,14 +111,19 @@ export function SourceMediaGrid({ genreId, sid, manual }: { genreId: string; sid
     const withItem = manual.map((m) => ({ ...m, status: m.status ?? "ativo" }));
     return (
       <div className="px-3 pb-3 pt-1">
-        <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted">Adicionados manualmente ({withItem.length})</div>
+        <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted">
+          Adicionados manualmente ({withItem.length})
+        </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
           {withItem.map((m) => (
             <MediaCard
               key={m.id}
               m={m}
               onDelete={() => {
-                if (window.confirm(`Apagar "${m.title}" de vez? O link e o vídeo saem da biblioteca.`)) delManual.mutate(m);
+                if (
+                  window.confirm(`Apagar "${m.title}" de vez? O link e o vídeo saem da biblioteca.`)
+                )
+                  delManual.mutate(m);
               }}
             />
           ))}
@@ -105,7 +149,12 @@ export function SourceMediaGrid({ genreId, sid, manual }: { genreId: string; sid
             key={m.id}
             m={m}
             onDelete={() => {
-              if (window.confirm(`Apagar "${m.title}" de vez? O vídeo sai da biblioteca (a fonte para de listá-lo).`)) delMedia.mutate(m);
+              if (
+                window.confirm(
+                  `Apagar "${m.title}" de vez? O vídeo sai da biblioteca (a fonte para de listá-lo).`,
+                )
+              )
+                delMedia.mutate(m);
             }}
           />
         ))}
@@ -140,7 +189,15 @@ export interface FiltersDraft {
   newerMonths?: number | null;
 }
 
-export function FiltersModal({ source, genreId, onClose }: { source: SourceRow; genreId: string; onClose: () => void }) {
+export function FiltersModal({
+  source,
+  genreId,
+  onClose,
+}: {
+  source: SourceRow;
+  genreId: string;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
   const f = (source.filters || {}) as FiltersDraft;
   const [d, setD] = useState<FiltersDraft>({
@@ -161,9 +218,23 @@ export function FiltersModal({ source, genreId, onClose }: { source: SourceRow; 
 
   const save = useMutation({
     mutationFn: () => {
-      const list = (s?: string) => (s ? s.split(/[,;]/).map((x) => x.trim().toLowerCase()).filter(Boolean) : []);
+      const list = (s?: string) =>
+        s
+          ? s
+              .split(/[,;]/)
+              .map((x) => x.trim().toLowerCase())
+              .filter(Boolean)
+          : [];
       const any =
-        !!d.titleHas || !!d.titleLacks || d.minDur || d.maxDur || d.excludeShorts || d.minViews || d.maxViews || d.excludeLive || d.dateMode !== "any";
+        !!d.titleHas ||
+        !!d.titleLacks ||
+        d.minDur ||
+        d.maxDur ||
+        d.excludeShorts ||
+        d.minViews ||
+        d.maxViews ||
+        d.excludeLive ||
+        d.dateMode !== "any";
       return api.put(`/genres/${genreId}/sources/${source.id}`, {
         filters: any
           ? {
@@ -197,31 +268,63 @@ export function FiltersModal({ source, genreId, onClose }: { source: SourceRow; 
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Título contém (vírgulas)" hint="qualquer um dos termos">
-            <input value={d.titleHas} onChange={(e) => setD({ ...d, titleHas: e.target.value })} className="w-full" />
+            <input
+              value={d.titleHas}
+              onChange={(e) => setD({ ...d, titleHas: e.target.value })}
+              className="w-full"
+            />
           </Field>
           <Field label="Título NÃO contém">
-            <input value={d.titleLacks} onChange={(e) => setD({ ...d, titleLacks: e.target.value })} className="w-full" />
+            <input
+              value={d.titleLacks}
+              onChange={(e) => setD({ ...d, titleLacks: e.target.value })}
+              className="w-full"
+            />
           </Field>
           <Field label="Duração mín (min)">
-            <input type="number" value={d.minDur ?? ""} onChange={(e) => setD({ ...d, minDur: num(e.target.value) })} />
+            <input
+              type="number"
+              value={d.minDur ?? ""}
+              onChange={(e) => setD({ ...d, minDur: num(e.target.value) })}
+            />
           </Field>
           <Field label="Duração máx (min)">
-            <input type="number" value={d.maxDur ?? ""} onChange={(e) => setD({ ...d, maxDur: num(e.target.value) })} />
+            <input
+              type="number"
+              value={d.maxDur ?? ""}
+              onChange={(e) => setD({ ...d, maxDur: num(e.target.value) })}
+            />
           </Field>
           <Field label="Views mín">
-            <input type="number" value={d.minViews ?? ""} onChange={(e) => setD({ ...d, minViews: num(e.target.value) })} />
+            <input
+              type="number"
+              value={d.minViews ?? ""}
+              onChange={(e) => setD({ ...d, minViews: num(e.target.value) })}
+            />
           </Field>
           <Field label="Views máx">
-            <input type="number" value={d.maxViews ?? ""} onChange={(e) => setD({ ...d, maxViews: num(e.target.value) })} />
+            <input
+              type="number"
+              value={d.maxViews ?? ""}
+              onChange={(e) => setD({ ...d, maxViews: num(e.target.value) })}
+            />
           </Field>
         </div>
         <div className="flex gap-5 text-sm">
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={d.excludeShorts} onChange={(e) => setD({ ...d, excludeShorts: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={d.excludeShorts}
+              onChange={(e) => setD({ ...d, excludeShorts: e.target.checked })}
+            />
             excluir shorts (&lt;60s)
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={d.excludeLive} onChange={(e) => setD({ ...d, excludeLive: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={d.excludeLive}
+              onChange={(e) => setD({ ...d, excludeLive: e.target.checked })}
+            />
             excluir ao vivo
           </label>
         </div>
@@ -237,25 +340,44 @@ export function FiltersModal({ source, genreId, onClose }: { source: SourceRow; 
           {d.dateMode === "range" && (
             <>
               <Field label="De">
-                <input type="number" value={d.yearFrom ?? ""} onChange={(e) => setD({ ...d, yearFrom: num(e.target.value) })} />
+                <input
+                  type="number"
+                  value={d.yearFrom ?? ""}
+                  onChange={(e) => setD({ ...d, yearFrom: num(e.target.value) })}
+                />
               </Field>
               <Field label="Até">
-                <input type="number" value={d.yearTo ?? ""} onChange={(e) => setD({ ...d, yearTo: num(e.target.value) })} />
+                <input
+                  type="number"
+                  value={d.yearTo ?? ""}
+                  onChange={(e) => setD({ ...d, yearTo: num(e.target.value) })}
+                />
               </Field>
             </>
           )}
           {d.dateMode === "older" && (
             <Field label="Anos">
-              <input type="number" value={d.olderYears ?? ""} onChange={(e) => setD({ ...d, olderYears: num(e.target.value) })} />
+              <input
+                type="number"
+                value={d.olderYears ?? ""}
+                onChange={(e) => setD({ ...d, olderYears: num(e.target.value) })}
+              />
             </Field>
           )}
           {d.dateMode === "newer" && (
             <Field label="Meses">
-              <input type="number" value={d.newerMonths ?? ""} onChange={(e) => setD({ ...d, newerMonths: num(e.target.value) })} />
+              <input
+                type="number"
+                value={d.newerMonths ?? ""}
+                onChange={(e) => setD({ ...d, newerMonths: num(e.target.value) })}
+              />
             </Field>
           )}
         </div>
-        <p className="text-[11px] text-muted">Regra de ouro: dado faltando = passa (o filtro nunca derruba vídeo por falta de informação).</p>
+        <p className="text-[11px] text-muted">
+          Regra de ouro: dado faltando = passa (o filtro nunca derruba vídeo por falta de
+          informação).
+        </p>
         <ErrorMsg error={save.error} />
         <Button variant="signal" onClick={() => save.mutate()} disabled={save.isPending}>
           Salvar filtros
@@ -266,9 +388,24 @@ export function FiltersModal({ source, genreId, onClose }: { source: SourceRow; 
 }
 
 // ---------- bloco de uma fonte ----------
-const TYPE_ICON: Record<string, typeof MonitorPlay> = { channel: MonitorPlay, search: Search, channelSearch: Search, video: MonitorPlay };
+const TYPE_ICON: Record<string, typeof MonitorPlay> = {
+  channel: MonitorPlay,
+  search: Search,
+  channelSearch: Search,
+  video: MonitorPlay,
+};
 
-export function SourceBlock({ s, genreId, open, onToggleOpen }: { s: SourceRow; genreId: string; open: boolean; onToggleOpen: () => void }) {
+export function SourceBlock({
+  s,
+  genreId,
+  open,
+  onToggleOpen,
+}: {
+  s: SourceRow;
+  genreId: string;
+  open: boolean;
+  onToggleOpen: () => void;
+}) {
   const qc = useQueryClient();
   const [filters, setFilters] = useState(false);
   const invalidate = () => qc.invalidateQueries({ queryKey: ["genre", genreId] });
@@ -281,38 +418,73 @@ export function SourceBlock({ s, genreId, open, onToggleOpen }: { s: SourceRow; 
     },
   });
   const toggle = useMutation({
-    mutationFn: () => api.put(`/genres/${genreId}/sources/${s.id}`, { status: s.status === "ativo" ? "pausado" : "ativo" }),
+    mutationFn: () =>
+      api.put(`/genres/${genreId}/sources/${s.id}`, {
+        status: s.status === "ativo" ? "pausado" : "ativo",
+      }),
     onSuccess: invalidate,
   });
-  const del = useMutation({ mutationFn: () => api.del(`/genres/${genreId}/sources/${s.id}`), onSuccess: invalidate });
+  const del = useMutation({
+    mutationFn: () => api.del(`/genres/${genreId}/sources/${s.id}`),
+    onSuccess: invalidate,
+  });
 
   const Icon = TYPE_ICON[s.type] ?? MonitorPlay;
-  const label = s.type === "search" || s.type === "channelSearch" ? `busca "${s.query}"` : s.url.replace("https://www.youtube.com/", "");
+  const label =
+    s.type === "search" || s.type === "channelSearch"
+      ? `busca "${s.query}"`
+      : s.url.replace("https://www.youtube.com/", "");
 
   return (
     <div className="rounded-lg border border-muted/10 bg-surface">
       <div className="flex flex-wrap items-center gap-2 p-3">
         <button onClick={onToggleOpen} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-          {open ? <ChevronDown size={16} className="shrink-0 text-muted" /> : <ChevronRight size={16} className="shrink-0 text-muted" />}
+          {open ? (
+            <ChevronDown size={16} className="shrink-0 text-muted" />
+          ) : (
+            <ChevronRight size={16} className="shrink-0 text-muted" />
+          )}
           <Icon size={16} className="shrink-0 text-signal" />
           <span className="line-clamp-1 text-sm font-medium">{label}</span>
           <span className="shrink-0 text-[11px] text-muted">
-            limite {s.limit} · {s.sort === "oldest" ? "mais antigos" : "recentes"} · último sync {s.lastSyncAt ? new Date(s.lastSyncAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "nunca"}
+            limite {s.limit} · {s.sort === "oldest" ? "mais antigos" : "recentes"} · último sync{" "}
+            {s.lastSyncAt
+              ? new Date(s.lastSyncAt).toLocaleString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : "nunca"}
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-1">
-          {s.status === "ativo" ? <Badge tone="green">ativo</Badge> : <Badge tone="red">pausado</Badge>}
-          <Button size="sm" variant="ghost" title="Sincronizar esta fonte" onClick={() => sync.mutate()}>
+          {s.status === "ativo" ? (
+            <Badge tone="green">ativo</Badge>
+          ) : (
+            <Badge tone="red">pausado</Badge>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            title="Sincronizar esta fonte"
+            onClick={() => sync.mutate()}
+          >
             <RefreshCw size={14} className={sync.isPending ? "animate-spin text-signal" : ""} />
           </Button>
           <Button size="sm" variant="ghost" title="Filtros" onClick={() => setFilters(true)}>
             <SlidersHorizontal size={14} />
           </Button>
-          <Button size="sm" variant="ghost" title={s.status === "ativo" ? "Pausar fonte" : "Ativar fonte"} onClick={() => toggle.mutate()}>
+          <Button
+            size="sm"
+            variant="ghost"
+            title={s.status === "ativo" ? "Pausar fonte" : "Ativar fonte"}
+            onClick={() => toggle.mutate()}
+          >
             {s.status === "ativo" ? <Pause size={14} /> : <Play size={14} />}
           </Button>
           <Button size="sm" variant="ghost" title="Remover fonte" onClick={() => del.mutate()}>
-            <Trash2 size={14} className="text-red-400" />
+            <Trash2 size={14} className="text-danger" />
           </Button>
         </div>
       </div>
@@ -324,7 +496,7 @@ export function SourceBlock({ s, genreId, open, onToggleOpen }: { s: SourceRow; 
           ))}
         </div>
       )}
-      {s.lastError && <div className="px-3 pb-2 text-[11px] text-red-400">⚠ {s.lastError}</div>}
+      {s.lastError && <div className="px-3 pb-2 text-[11px] text-danger">⚠ {s.lastError}</div>}
 
       {open && <SourceMediaGrid genreId={genreId} sid={s.id} />}
       {filters && <FiltersModal source={s} genreId={genreId} onClose={() => setFilters(false)} />}
@@ -351,7 +523,9 @@ export function AddSourceBar({ genreId }: { genreId: string }) {
 
   return (
     <Card>
-      <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Adicionar fonte</div>
+      <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
+        Adicionar fonte
+      </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {(
           [
@@ -361,7 +535,12 @@ export function AddSourceBar({ genreId }: { genreId: string }) {
             ["video", "Vídeo (manual)", MonitorPlay],
           ] as const
         ).map(([k, label, I]) => (
-          <Button key={k} size="sm" variant={kind === k ? "signal" : "default"} onClick={() => setKind(k)}>
+          <Button
+            key={k}
+            size="sm"
+            variant={kind === k ? "signal" : "default"}
+            onClick={() => setKind(k)}
+          >
             <span className="flex items-center gap-1.5">
               <I size={13} /> {label}
             </span>
@@ -381,12 +560,24 @@ export function AddSourceBar({ genreId }: { genreId: string }) {
         )}
         {(kind === "search" || kind === "channelSearch") && (
           <Field label="Termo de busca">
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rocket League" className="w-60" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Rocket League"
+              className="w-60"
+            />
           </Field>
         )}
         {kind !== "video" && (
           <Field label="Limite por sync">
-            <input type="number" min={1} max={50} value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="w-20" />
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              className="w-20"
+            />
           </Field>
         )}
         <ErrorMsg error={add.error} />
@@ -399,7 +590,8 @@ export function AddSourceBar({ genreId }: { genreId: string }) {
         </Button>
       </div>
       <p className="mt-2 text-[11px] text-muted">
-        Depois de adicionar, use ↻ na fonte para sincronizar — os vídeos aparecem no bloco dela, com thumbnails, para você conferir e remover o que não quiser.
+        Depois de adicionar, use ↻ na fonte para sincronizar — os vídeos aparecem no bloco dela, com
+        thumbnails, para você conferir e remover o que não quiser.
       </p>
     </Card>
   );

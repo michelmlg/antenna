@@ -20,7 +20,8 @@ interface Props {
   blocks: ScheduleRow[];
   today: boolean;
   nowMin: number | null; // null → linha "agora" fora
-  onAirProgramId: string | null;
+  onAirBlockId: string | null; // só o bloco em execução (não todos do gênero)
+  guideMin: number | null; // guia vertical do drag da biblioteca (minuto do snap)
   selectedId: string | null;
   pendingIds: Set<string>;
   preview: Preview | null;
@@ -39,7 +40,8 @@ export function DayLane({
   blocks,
   today,
   nowMin,
-  onAirProgramId,
+  onAirBlockId,
+  guideMin,
   selectedId,
   pendingIds,
   preview,
@@ -65,11 +67,15 @@ export function DayLane({
   return (
     <div className="flex border-b border-muted/10" style={{ height: LANE_H }}>
       <div
-        className={`sticky left-0 z-20 flex w-16 shrink-0 items-center justify-end border-r ${
+        className={`sticky left-0 z-20 flex w-20 shrink-0 items-center justify-end border-r ${
           today ? "border-signal/60 bg-signal/10" : "border-muted/20 bg-surface"
         } pr-2`}
       >
-        <span className={`text-xs font-semibold uppercase tracking-wide ${today ? "text-signal" : "text-muted"}`}>{name}</span>
+        <span
+          className={`text-xs font-semibold uppercase tracking-wide ${today ? "text-signal" : "text-muted"}`}
+        >
+          {name}
+        </span>
       </div>
       <div
         ref={(el) => {
@@ -91,15 +97,27 @@ export function DayLane({
             px={px}
             selected={selectedId === r.id}
             pending={pendingIds.has(r.id)}
-            onAir={!!onAirProgramId && onAirProgramId === r.program.id}
+            onAir={onAirBlockId === r.id}
             onPick={onPick}
             onPickUp={onPickUp}
             onPickMove={onPickMove}
             onOpen={onOpen}
           />
         ))}
+        {guideMin !== null && (
+          <div
+            className="pointer-events-none absolute inset-y-0 z-[3] w-px bg-signal/40"
+            style={{ left: guideMin * px }}
+          />
+        )}
         {preview && preview.dow === dow && (
-          <GhostBlock dow={dow} start={preview.start} end={preview.end} valid={preview.valid} px={px} />
+          <GhostBlock
+            dow={dow}
+            start={preview.start}
+            end={preview.end}
+            valid={preview.valid}
+            px={px}
+          />
         )}
         {today && nowMin !== null && (
           <div

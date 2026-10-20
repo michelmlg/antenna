@@ -26,19 +26,35 @@ export default function Operacao() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Estado</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+            Estado
+          </div>
           <dl className="space-y-1.5 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted">playout</dt>
-              <dd>{state?.running ? <Badge tone="signal">rodando</Badge> : <Badge>parado</Badge>}</dd>
+              <dd>
+                {state?.running ? <Badge tone="signal">rodando</Badge> : <Badge>parado</Badge>}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted">worker</dt>
-              <dd>{state?.workerOnline ? <Badge tone="green">online</Badge> : <Badge tone="red">offline</Badge>}</dd>
+              <dd>
+                {state?.workerOnline ? (
+                  <Badge tone="green">online</Badge>
+                ) : (
+                  <Badge tone="red">offline</Badge>
+                )}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted">publicação</dt>
-              <dd>{state?.stale ? <Badge tone="red">atrasada</Badge> : <Badge tone="green">fresca</Badge>}</dd>
+              <dd>
+                {state?.stale ? (
+                  <Badge tone="red">atrasada</Badge>
+                ) : (
+                  <Badge tone="green">fresca</Badge>
+                )}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted">no ar</dt>
@@ -52,14 +68,16 @@ export default function Operacao() {
             </div>
           </dl>
           {state?.lastError && (
-            <p className="mt-3 break-words rounded border border-red-500/30 bg-red-500/5 p-2 text-[11px] text-red-400">
+            <p className="mt-3 break-words rounded border border-danger/30 bg-danger/5 p-2 text-[11px] text-danger">
               último erro: {state.lastError}
             </p>
           )}
         </Card>
 
         <Card className="lg:col-span-2">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Syncs recentes</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+            Syncs recentes
+          </div>
           {!runs ? (
             <Spinner />
           ) : runs.length === 0 ? (
@@ -69,16 +87,26 @@ export default function Operacao() {
               <tbody>
                 {runs.map((r) => (
                   <tr key={r.id} className="border-t border-muted/10">
-                    <td className="py-1.5 pr-2 font-mono text-[11px] text-muted">{fmtWhen(r.startedAt)}</td>
+                    <td className="py-1.5 pr-2 font-mono text-[11px] text-muted">
+                      {fmtWhen(r.startedAt)}
+                    </td>
                     <td className="py-1.5 pr-2">
                       {r.source.genre && <Badge>{r.source.genre.name}</Badge>}{" "}
                       <span className="text-xs text-muted">
-                        {r.source.type === "search" || r.source.type === "channelSearch" ? r.source.query : r.source.url}
+                        {r.source.type === "search" || r.source.type === "channelSearch"
+                          ? r.source.query
+                          : r.source.url}
                       </span>
                     </td>
                     <td className="py-1.5 pr-2 text-xs">{r.message}</td>
                     <td className="py-1.5 text-right">
-                      {r.errors > 0 ? <Badge tone="red">{r.errors} erros</Badge> : r.added > 0 ? <Badge tone="green">+{r.added}</Badge> : <Badge>ok</Badge>}
+                      {r.errors > 0 ? (
+                        <Badge tone="red">{r.errors} erros</Badge>
+                      ) : r.added > 0 ? (
+                        <Badge tone="green">+{r.added}</Badge>
+                      ) : (
+                        <Badge>ok</Badge>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -89,7 +117,9 @@ export default function Operacao() {
       </div>
 
       <Card className="mt-4">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Histórico de reprodução</div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+          Histórico de reprodução
+        </div>
         {!history ? (
           <Spinner />
         ) : (
@@ -105,7 +135,9 @@ export default function Operacao() {
             <tbody>
               {history.map((h) => (
                 <tr key={h.id} className="border-t border-muted/10">
-                  <td className="py-1.5 pr-2 font-mono text-xs text-muted">{fmtWhen(h.startedAt)}</td>
+                  <td className="py-1.5 pr-2 font-mono text-xs text-muted">
+                    {fmtWhen(h.startedAt)}
+                  </td>
                   <td className="line-clamp-1 py-1.5 pr-2">{h.media.title}</td>
                   <td className="py-1.5 pr-2 font-mono text-xs">{fmtDur(h.duration)}</td>
                   <td className="py-1.5">

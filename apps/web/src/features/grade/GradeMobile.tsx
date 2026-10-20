@@ -34,15 +34,31 @@ export default function GradeMobile() {
       setErrs((e) => ({ ...e, [row.id]: "duração mínima de 5 min" }));
       return;
     }
-    const ok = await updateBlock(row.id, { dayOfWeek: row.dayOfWeek, startTime: start, endTime: end });
-    setErrs((e) => ({ ...e, [row.id]: ok ? "" : "conflito com outro bloco — restaurado" }));
+    const result = await updateBlock(row.id, {
+      dayOfWeek: row.dayOfWeek,
+      startTime: start,
+      endTime: end,
+    });
+    setErrs((e) => ({
+      ...e,
+      [row.id]:
+        result === true
+          ? ""
+          : typeof result === "string" && result
+            ? result
+            : "conflito com outro bloco — restaurado",
+    }));
   }
 
-  const pill =
-    sched.saving ? <Badge tone="signal">salvando…</Badge>
-    : sched.status.kind === "error" ? <Badge tone="red">falhou (desfeito)</Badge>
-    : sched.status.kind === "ok" ? <Badge tone="green">salvo</Badge>
-    : <Badge tone="muted">sem alterações</Badge>;
+  const pill = sched.saving ? (
+    <Badge tone="signal">salvando…</Badge>
+  ) : sched.status.kind === "error" ? (
+    <Badge tone="red">falhou (desfeito)</Badge>
+  ) : sched.status.kind === "ok" ? (
+    <Badge tone="green">salvo</Badge>
+  ) : (
+    <Badge tone="muted">sem alterações</Badge>
+  );
 
   return (
     <div className="space-y-3">
@@ -53,7 +69,12 @@ export default function GradeMobile() {
 
       <div className="flex gap-1 overflow-x-auto pb-1">
         {DOWS.map(([label], i) => (
-          <Button key={label} size="sm" variant={dow === i ? "signal" : "default"} onClick={() => setDow(i)}>
+          <Button
+            key={label}
+            size="sm"
+            variant={dow === i ? "signal" : "default"}
+            onClick={() => setDow(i)}
+          >
             {label}
           </Button>
         ))}
@@ -77,18 +98,21 @@ export default function GradeMobile() {
                   </span>
                   {onAirProgramId === r.program.id ? <Badge tone="signal">no ar</Badge> : null}
                   <button
-                    className="text-muted hover:text-red-400"
+                    className="text-muted hover:text-danger"
                     title="Excluir bloco"
                     onClick={() => {
-                      if (window.confirm(`Remover o bloco "${r.program.name}"?`)) void deleteBlock(r);
+                      if (window.confirm(`Remover o bloco "${r.program.name}"?`))
+                        void deleteBlock(r);
                     }}
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <input
                     type="time"
+                    id={`m-blk-${r.id}-s`}
+                    name={`m-blk-${r.id}-s`}
                     step={300}
                     defaultValue={r.startTime}
                     key={r.id + "-s"}
@@ -98,6 +122,8 @@ export default function GradeMobile() {
                   <span className="text-muted">–</span>
                   <input
                     type="time"
+                    id={`m-blk-${r.id}-e`}
+                    name={`m-blk-${r.id}-e`}
                     step={300}
                     defaultValue={r.endTime}
                     key={r.id + "-e"}
@@ -106,11 +132,15 @@ export default function GradeMobile() {
                   />
                   <span className="ml-auto text-xs text-muted">{dur > 0 ? durLabel(dur) : ""}</span>
                 </div>
-                {errs[r.id] && <div className="mt-1 text-xs text-red-400">⚠ {errs[r.id]}</div>}
+                {errs[r.id] && <div className="mt-1 text-xs text-danger">⚠ {errs[r.id]}</div>}
               </div>
             );
           })}
-          <Button variant="signal" className="w-full" onClick={() => setModal({ mode: "create", dow })}>
+          <Button
+            variant="signal"
+            className="w-full"
+            onClick={() => setModal({ mode: "create", dow })}
+          >
             <span className="flex items-center gap-1.5">
               <Plus size={14} /> Novo bloco
             </span>

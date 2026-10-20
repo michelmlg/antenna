@@ -20,7 +20,17 @@ interface Props {
 
 const CANVAS = "#00000055";
 
-export function ScheduleBlock({ row, px, selected, pending, onAir, onPick, onOpen, onPickUp, onPickMove }: Props) {
+export function ScheduleBlock({
+  row,
+  px,
+  selected,
+  pending,
+  onAir,
+  onPick,
+  onOpen,
+  onPickUp,
+  onPickMove,
+}: Props) {
   const start = toMin(row.startTime);
   const end = toMin(row.endTime);
   const width = Math.max(6, (end - start) * px - 2);
@@ -62,10 +72,16 @@ export function ScheduleBlock({ row, px, selected, pending, onAir, onPick, onOpe
         onPointerDown={(e) => onPick(e, row, "right")}
       />
       {!tiny && (
-        <div className={"flex h-full flex-col px-2 pt-1 overflow-hidden " + (narrow ? "justify-center" : "")}>
+        <div
+          className={
+            "flex h-full flex-col px-2 pt-1 overflow-hidden " + (narrow ? "justify-center" : "")
+          }
+        >
           <div className="flex items-center gap-1 text-[11px] font-semibold leading-tight truncate">
             {row.program.name}
-            {onAir && <span className="ml-0.5 shrink-0 rounded bg-white/25 px-1 text-[9px]">no ar</span>}
+            {onAir && (
+              <span className="ml-0.5 shrink-0 rounded bg-white/25 px-1 text-[9px]">no ar</span>
+            )}
           </div>
           {!narrow && (
             <div className="mt-0.5 font-mono text-[10px] opacity-85">
@@ -85,16 +101,30 @@ export function ScheduleBlock({ row, px, selected, pending, onAir, onPick, onOpe
 }
 
 /** Fantasma de preview durante arraste/resize/drop da biblioteca. */
-export function GhostBlock({ dow, start, end, valid, px }: { dow: number; start: number; end: number; valid: boolean; px: number }) {
+export function GhostBlock({
+  dow,
+  start,
+  end,
+  valid,
+  px,
+}: {
+  dow: number;
+  start: number;
+  end: number;
+  valid: boolean;
+  px: number;
+}) {
   void dow;
   return (
     <div
-      className={`pointer-events-none absolute z-[4] rounded-md border-2 ${
-        valid ? "border-signal bg-signal/15" : "border-red-500 bg-red-500/20"
+      className={`pointer-events-none absolute z-[8] rounded-md border-2 ${
+        valid ? "border-signal bg-signal/15" : "border-danger bg-danger/20"
       }`}
       style={{ left: start * px, top: 5, width: Math.max(6, (end - start) * px - 2), height: 54 }}
     >
-      <div className={`truncate px-2 pt-1 text-[11px] font-mono ${valid ? "text-signal" : "text-red-400"}`}>
+      <div
+        className={`truncate px-2 pt-1 text-[11px] font-mono ${valid ? "text-signal" : "text-danger"}`}
+      >
         {valid ? `${minutesToHHMM(start)}–${minutesToHHMM(end)}` : "conflito"}
       </div>
     </div>

@@ -22,7 +22,14 @@ const SCOPE_LABEL: Record<DraftIngredient["scope"], string> = {
 export function Mistura({ genre }: { genre: GenreDetail }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<DraftIngredient[] | null>(null);
-  const ingredients: DraftIngredient[] = draft ?? genre.ingredients.map((i) => ({ scope: i.scope, sourceId: i.sourceId, categoryName: i.categoryName, count: i.count }));
+  const ingredients: DraftIngredient[] =
+    draft ??
+    genre.ingredients.map((i) => ({
+      scope: i.scope,
+      sourceId: i.sourceId,
+      categoryName: i.categoryName,
+      count: i.count,
+    }));
 
   const save = useMutation({
     mutationFn: () => api.put(`/genres/${genre.id}/mix`, { ingredients }),
@@ -50,7 +57,8 @@ export function Mistura({ genre }: { genre: GenreDetail }) {
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-muted">Mistura</div>
           <p className="text-[11px] text-muted">
-            A sequência segue este padrão em ciclo, respeitando a janela anti-repetição ({genre.antiRepeatWindow}).
+            A sequência segue este padrão em ciclo, respeitando a janela anti-repetição (
+            {genre.antiRepeatWindow}).
           </p>
         </div>
         {draft && (
@@ -58,7 +66,12 @@ export function Mistura({ genre }: { genre: GenreDetail }) {
             <Button size="sm" onClick={() => setDraft(null)}>
               Cancelar
             </Button>
-            <Button size="sm" variant="signal" onClick={() => save.mutate()} disabled={save.isPending || !ingredients.length}>
+            <Button
+              size="sm"
+              variant="signal"
+              onClick={() => save.mutate()}
+              disabled={save.isPending || !ingredients.length}
+            >
               Salvar mistura
             </Button>
           </div>
@@ -70,11 +83,20 @@ export function Mistura({ genre }: { genre: GenreDetail }) {
         {ingredients.map((it, i) => {
           const source = genre.sources.find((s) => s.id === it.sourceId);
           return (
-            <div key={i} className="flex flex-wrap items-center gap-2 rounded border border-muted/10 bg-background/50 p-2.5">
+            <div
+              key={i}
+              className="flex flex-wrap items-center gap-2 rounded border border-muted/10 bg-background/50 p-2.5"
+            >
               <span className="font-mono text-xs text-signal">{i + 1}.</span>
               <select
                 value={it.scope}
-                onChange={(e) => set(i, { scope: e.target.value as DraftIngredient["scope"], sourceId: null, categoryName: null })}
+                onChange={(e) =>
+                  set(i, {
+                    scope: e.target.value as DraftIngredient["scope"],
+                    sourceId: null,
+                    categoryName: null,
+                  })
+                }
                 className="w-44"
               >
                 {Object.entries(SCOPE_LABEL).map(([k, v]) => (
@@ -84,11 +106,17 @@ export function Mistura({ genre }: { genre: GenreDetail }) {
                 ))}
               </select>
               {it.scope === "source" && (
-                <select value={it.sourceId ?? ""} onChange={(e) => set(i, { sourceId: e.target.value })} className="min-w-56">
+                <select
+                  value={it.sourceId ?? ""}
+                  onChange={(e) => set(i, { sourceId: e.target.value })}
+                  className="min-w-56"
+                >
                   <option value="">— escolha a fonte —</option>
                   {genre.sources.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.type === "search" || s.type === "channelSearch" ? `busca "${s.query}"` : s.url.replace("https://www.youtube.com/", "")}
+                      {s.type === "search" || s.type === "channelSearch"
+                        ? `busca "${s.query}"`
+                        : s.url.replace("https://www.youtube.com/", "")}
                     </option>
                   ))}
                 </select>
@@ -107,12 +135,16 @@ export function Mistura({ genre }: { genre: GenreDetail }) {
                   min={1}
                   max={10}
                   value={it.count}
-                  onChange={(e) => set(i, { count: Math.max(1, Math.min(10, Number(e.target.value))) })}
+                  onChange={(e) =>
+                    set(i, { count: Math.max(1, Math.min(10, Number(e.target.value))) })
+                  }
                   className="w-16"
                 />
                 <span className="text-[11px] text-muted">por ciclo</span>
               </div>
-              {source && <Badge>{source.status === "ativo" ? "fonte ativa" : "fonte pausada"}</Badge>}
+              {source && (
+                <Badge>{source.status === "ativo" ? "fonte ativa" : "fonte pausada"}</Badge>
+              )}
               <div className="ml-auto flex gap-1">
                 <Button size="sm" variant="ghost" onClick={() => move(i, -1)} title="Subir">
                   <ArrowUp size={14} />
@@ -120,8 +152,13 @@ export function Mistura({ genre }: { genre: GenreDetail }) {
                 <Button size="sm" variant="ghost" onClick={() => move(i, 1)} title="Descer">
                   <ArrowDown size={14} />
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setDraft(ingredients.filter((_, idx) => idx !== i))} title="Remover">
-                  <Trash2 size={14} className="text-red-400" />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDraft(ingredients.filter((_, idx) => idx !== i))}
+                  title="Remover"
+                >
+                  <Trash2 size={14} className="text-danger" />
                 </Button>
               </div>
             </div>
@@ -133,7 +170,17 @@ export function Mistura({ genre }: { genre: GenreDetail }) {
         <Button
           size="sm"
           className="mt-3"
-          onClick={() => setDraft([...ingredients, { scope: "source", sourceId: genre.sources[0]?.id ?? null, categoryName: null, count: 1 }])}
+          onClick={() =>
+            setDraft([
+              ...ingredients,
+              {
+                scope: "source",
+                sourceId: genre.sources[0]?.id ?? null,
+                categoryName: null,
+                count: 1,
+              },
+            ])
+          }
         >
           <span className="flex items-center gap-1">
             <Plus size={13} /> Ingrediente
@@ -158,7 +205,10 @@ export function Simulador({ genreId }: { genreId: string }) {
   const [open, setOpen] = useState(false);
   const { data, refetch, isFetching } = useQuery({
     queryKey: ["genre-preview", genreId, count],
-    queryFn: () => api.get<{ approx: boolean; window: number; items: PreviewItem[] }>(`/genres/${genreId}/preview?count=${count}`),
+    queryFn: () =>
+      api.get<{ approx: boolean; window: number; items: PreviewItem[] }>(
+        `/genres/${genreId}/preview?count=${count}`,
+      ),
     enabled: open,
   });
 
@@ -167,7 +217,9 @@ export function Simulador({ genreId }: { genreId: string }) {
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-muted">Simulador</div>
-          <p className="text-[11px] text-muted">Projeta a sequência com as regras atuais (não interfere no ar).</p>
+          <p className="text-[11px] text-muted">
+            Projeta a sequência com as regras atuais (não interfere no ar).
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <select value={count} onChange={(e) => setCount(Number(e.target.value))} className="w-20">
@@ -177,7 +229,14 @@ export function Simulador({ genreId }: { genreId: string }) {
               </option>
             ))}
           </select>
-          <Button variant="signal" size="sm" onClick={() => { setOpen(true); refetch(); }}>
+          <Button
+            variant="signal"
+            size="sm"
+            onClick={() => {
+              setOpen(true);
+              refetch();
+            }}
+          >
             <span className="flex items-center gap-1">
               <Play size={13} /> Simular
             </span>
@@ -197,8 +256,13 @@ export function Simulador({ genreId }: { genreId: string }) {
               </div>
               <ol className="space-y-1.5">
                 {data.items.map((it, i) => (
-                  <li key={`${it.mediaId}-${i}`} className="flex items-baseline gap-2 border-t border-muted/10 pt-1.5 text-sm first:border-0 first:pt-0">
-                    <span className="font-mono text-xs text-muted">{String(i + 1).padStart(2, "0")}</span>
+                  <li
+                    key={`${it.mediaId}-${i}`}
+                    className="flex items-baseline gap-2 border-t border-muted/10 pt-1.5 text-sm first:border-0 first:pt-0"
+                  >
+                    <span className="font-mono text-xs text-muted">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
                     <Badge tone="signal">{it.scopeLabel}</Badge>
                     <span className="line-clamp-1 flex-1">{it.title}</span>
                     <span className="text-[11px] text-muted">{fmtDur(it.duration)}</span>

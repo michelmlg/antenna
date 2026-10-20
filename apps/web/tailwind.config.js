@@ -11,6 +11,7 @@ export default {
         signal: "#FFB547", // sinal — acento: AO VIVO, CTAs, seleção
         foreground: "#FAFAF5", // texto principal
         muted: "#A3A3A3", // texto secundário, bordas sutis
+        danger: "#EF4444", // erros, conflitos, ações destrutivas
       },
     },
   },
