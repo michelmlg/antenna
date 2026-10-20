@@ -20,6 +20,9 @@ body {
 *::-webkit-scrollbar-thumb {
   @apply bg-surface rounded;
 }
+*::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted/40;
+}
 *::-webkit-scrollbar-track {
   @apply bg-background;
 }
@@ -27,9 +30,29 @@ body {
 input,
 select,
 textarea {
-  @apply bg-background border border-muted/30 rounded px-2 py-1.5 text-sm text-foreground outline-none focus:border-signal;
+  @apply bg-background border border-muted/30 rounded-md px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-signal focus:ring-1 focus:ring-signal/40;
 }
 
 button {
   cursor: pointer;
+}
+
+/* animações curtas (design.md: funcionais, sem exagero) */
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }

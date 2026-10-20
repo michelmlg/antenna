@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
-import { X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`bg-surface rounded-lg border border-muted/10 p-4 ${className}`}>
+    <div
+      className={`rounded-xl border border-muted/10 bg-surface shadow-sm shadow-black/20 ${className}`}
+    >
       {children}
     </div>
   );
@@ -29,13 +31,15 @@ export function Button({
   title?: string;
 }) {
   const base =
-    "rounded font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+    "rounded-lg font-medium transition-all duration-100 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/50 active:scale-[0.98]";
   const sizes = size === "sm" ? "px-2.5 py-1 text-xs" : "px-3.5 py-2 text-sm";
   const variants = {
-    default: "bg-surface hover:bg-muted/20 border border-muted/20 text-foreground",
-    signal: "bg-signal text-background hover:bg-signal/90 font-semibold",
+    default:
+      "bg-surface hover:bg-muted/20 border border-muted/20 text-foreground shadow-sm shadow-black/10",
+    signal: "bg-signal text-background hover:bg-signal/90 font-semibold shadow-sm shadow-signal/20",
     ghost: "bg-transparent hover:bg-muted/10 text-muted hover:text-foreground",
-    danger: "bg-transparent border border-danger/40 text-danger hover:bg-danger/10",
+    danger:
+      "bg-transparent border border-danger/40 text-danger hover:bg-danger/10 hover:border-danger/60",
   };
   return (
     <button
@@ -64,7 +68,9 @@ export function Badge({
     red: "bg-danger/15 text-danger",
   };
   return (
-    <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${tones[tone]}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${tones[tone]}`}
+    >
       {children}
     </span>
   );
@@ -99,16 +105,16 @@ export function Modal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm [animation:overlay-in_120ms_ease-out]"
       onClick={onClose}
     >
       <div
-        className="bg-surface w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-lg border border-muted/20 p-5"
+        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-muted/20 bg-surface p-5 shadow-xl shadow-black/40 [animation:panel-in_140ms_ease-out]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold">{title}</h3>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={onClose} title="Fechar">
             <X size={16} />
           </Button>
         </div>
@@ -119,7 +125,11 @@ export function Modal({
 }
 
 export function Spinner({ label = "carregando…" }: { label?: string }) {
-  return <div className="animate-pulse text-sm text-muted">{label}</div>;
+  return (
+    <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted">
+      <Loader2 size={16} className="animate-spin" /> {label}
+    </div>
+  );
 }
 
 export function Empty({ children }: { children: ReactNode }) {
@@ -129,7 +139,7 @@ export function Empty({ children }: { children: ReactNode }) {
 export function ErrorMsg({ error }: { error: unknown }) {
   if (!error) return null;
   return (
-    <div className="rounded border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+    <div className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
       {String(error instanceof Error ? error.message : error)}
     </div>
   );

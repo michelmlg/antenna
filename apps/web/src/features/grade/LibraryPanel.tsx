@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 
 import { useDraggable } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, GripVertical, Plus, Search } from "lucide-react";
 import { api, type GenreRow, type ScheduleRow } from "../../lib/api";
 import { GenreIcon } from "../../lib/icons";
 import { Badge, Button, Empty, Spinner } from "../../components/ui";
@@ -159,17 +159,21 @@ function LibItem({ genre }: { genre: GenreRow }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`group cursor-grab touch-none rounded border border-muted/10 px-2 py-1.5 ${
+      className={`group cursor-grab touch-none rounded-lg border border-muted/10 bg-background/40 px-2 py-1.5 transition-all hover:border-muted/30 hover:bg-muted/10 hover:shadow-md hover:shadow-black/20 ${
         isDragging ? "opacity-40" : ""
       }`}
       style={{ borderLeft: `3px solid ${genre.color}` }}
       title={`${genre.name} — arraste para a grade`}
     >
       <div className="flex items-center gap-1.5">
+        <GripVertical
+          size={11}
+          className="shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100"
+        />
         <GenreIcon name={genre.icon} size={12} />
         <span className="truncate text-xs font-medium">{genre.name}</span>
       </div>
-      <div className="mt-0.5 flex items-center justify-between text-[10px] text-muted">
+      <div className="mt-0.5 flex items-center justify-between pl-[19px] text-[10px] text-muted">
         <span className="truncate">
           {videos} vídeo{videos === 1 ? "" : "s"}
         </span>
