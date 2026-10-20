@@ -680,7 +680,7 @@ export default function Grade() {
               onToggle={() => setLibOpen((v) => !v)}
               onNewBlock={() => setModal({})}
             />
-            <Card className="min-w-0 flex-1 p-0">
+            <Card flush className="min-w-0 flex-1">
               <div
                 ref={scrollerRefCb}
                 className="overflow-y-auto overflow-x-auto rounded-lg"

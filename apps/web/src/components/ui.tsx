@@ -1,10 +1,21 @@
 import type { ReactNode } from "react";
 import { Loader2, X } from "lucide-react";
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Card({
+  children,
+  className = "",
+  flush = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** sem padding interno — para conteúdo edge-to-edge (ex.: timeline da grade) */
+  flush?: boolean;
+}) {
   return (
     <div
-      className={`rounded-xl border border-muted/10 bg-surface shadow-sm shadow-black/20 ${className}`}
+      className={`rounded-xl border border-muted/10 bg-surface shadow-sm shadow-black/20 ${
+        flush ? "p-0" : "p-4"
+      } ${className}`}
     >
       {children}
     </div>
