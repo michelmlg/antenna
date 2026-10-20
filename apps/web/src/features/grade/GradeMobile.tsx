@@ -136,11 +136,7 @@ export default function GradeMobile() {
               </div>
             );
           })}
-          <Button
-            variant="signal"
-            className="w-full"
-            onClick={() => setModal({ mode: "create", dow })}
-          >
+          <Button variant="signal" className="w-full" onClick={() => setModal({ dow })}>
             <span className="flex items-center gap-1.5">
               <Plus size={14} /> Novo bloco
             </span>
@@ -149,13 +145,7 @@ export default function GradeMobile() {
       )}
 
       {modal && (
-        <BlockModal
-          state={modal}
-          rows={rows}
-          onClose={() => setModal(null)}
-          onCreate={addBlock}
-          onEdit={updateBlock}
-        />
+        <BlockModal state={modal} rows={rows} onClose={() => setModal(null)} onCreate={addBlock} />
       )}
     </div>
   );

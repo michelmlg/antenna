@@ -1,16 +1,14 @@
-/** Modal de bloco: criar (biblioteca/botão) ou editar horários/dia (duplo-clique). */
+/** Modal de criação de bloco ("+ Programar" / "Novo bloco"). Edição é na grade (drag/alças). */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type GenreRow, type ScheduleRow } from "../../lib/api";
 import { hasOverlap, toMin } from "./time";
-import { Badge, Button, ErrorMsg, Field, Modal } from "../../components/ui";
-import type { MutationResult, SchedulePatch } from "./useScheduleMutations";
+import { Button, ErrorMsg, Field, Modal } from "../../components/ui";
+import type { MutationResult } from "./useScheduleMutations";
 import { DOWS } from "./time";
 
 export interface ModalState {
-  mode: "create" | "edit";
   dow?: number;
-  row?: ScheduleRow;
 }
 
 interface Props {
@@ -23,35 +21,32 @@ interface Props {
     startTime: string;
     endTime: string;
   }): Promise<MutationResult>;
-  onEdit(id: string, patch: SchedulePatch): Promise<MutationResult>;
 }
 
-export function BlockModal({ state, rows, onClose, onCreate, onEdit }: Props) {
-  const isEdit = state.mode === "edit";
+export function BlockModal({ state, rows, onClose, onCreate }: Props) {
   const { data: genres } = useQuery({
     queryKey: ["genres"],
     queryFn: () => api.get<GenreRow[]>("/genres"),
   });
 
   const [genreId, setGenreId] = useState("");
-  const [dow, setDow] = useState(state.row?.dayOfWeek ?? state.dow ?? new Date().getDay());
-  const [start, setStart] = useState(state.row?.startTime ?? "20:00");
-  const [end, setEnd] = useState(state.row?.endTime ?? "21:00");
+  const [dow, setDow] = useState(state.dow ?? new Date().getDay());
+  const [start, setStart] = useState("20:00");
+  const [end, setEnd] = useState("21:00");
   const [apiError, setApiError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
 
   const dur = toMin(end) - toMin(start);
-  const overlap = hasOverlap(rows, dow, toMin(start), toMin(end), state.row?.id);
-  const invalid =
-    !isEdit && !genreId
-      ? "escolha um gênero"
-      : dur < 5
-        ? "duração mínima de 5 min"
-        : dur <= 0
-          ? "fim antes do início"
-          : overlap
-            ? "sobreposição com outro bloco deste dia"
-            : null;
+  const overlap = hasOverlap(rows, dow, toMin(start), toMin(end));
+  const invalid = !genreId
+    ? "escolha um gênero"
+    : dur < 5
+      ? "duração mínima de 5 min"
+      : dur <= 0
+        ? "fim antes do início"
+        : overlap
+          ? "sobreposição com outro bloco deste dia"
+          : null;
 
   const canSave = !invalid && !saving;
 
@@ -59,50 +54,33 @@ export function BlockModal({ state, rows, onClose, onCreate, onEdit }: Props) {
     if (invalid) return;
     setSaving(true);
     setApiError(null);
-    const result =
-      isEdit && state.row
-        ? await onEdit(state.row.id, { dayOfWeek: dow, startTime: start, endTime: end })
-        : await onCreate({ genreId, dayOfWeek: dow, startTime: start, endTime: end });
+    const result = await onCreate({ genreId, dayOfWeek: dow, startTime: start, endTime: end });
     setSaving(false);
     if (result === true) onClose();
     else if (typeof result === "string" && result) setApiError(new Error(result));
   }
 
   return (
-    <Modal title={isEdit ? "Editar bloco" : "Programar bloco"} onClose={onClose}>
+    <Modal title="Programar bloco" onClose={onClose}>
       <div className="space-y-3">
-        {isEdit && state.row ? (
-          <div className="rounded border border-muted/10 bg-background px-3 py-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span
-                className="font-medium"
-                style={{ color: state.row.program.genre?.color || undefined }}
-              >
-                {state.row.program.name}
-              </span>
-              <Badge tone="muted">{state.row.program.genre?.name ?? "sem gênero"}</Badge>
-            </div>
-          </div>
-        ) : (
-          <Field label="Gênero (cria/reaproveita o auto-programa)">
-            <select
-              id="blk-genre"
-              name="blk-genre"
-              value={genreId}
-              onChange={(e) => setGenreId(e.target.value)}
-              className="w-full"
-            >
-              <option value="">— selecione —</option>
-              {(genres ?? []).map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
+        <Field label="Gênero (cria/reaproveita o auto-programa)">
+          <select
+            id="blk-genre"
+            name="blk-genre"
+            value={genreId}
+            onChange={(e) => setGenreId(e.target.value)}
+            className="w-full"
+          >
+            <option value="">— selecione —</option>
+            {(genres ?? []).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="Dia da semana">
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {DOWS.map(([label], i) => (
               <Button
                 key={label}
@@ -151,7 +129,7 @@ export function BlockModal({ state, rows, onClose, onCreate, onEdit }: Props) {
             Cancelar
           </Button>
           <Button variant="signal" onClick={save} disabled={!canSave}>
-            {isEdit ? "Salvar" : "Programar"}
+            Programar
           </Button>
         </div>
       </div>

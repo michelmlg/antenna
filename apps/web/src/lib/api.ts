@@ -99,6 +99,28 @@ export interface ScheduleRow {
   };
 }
 
+export interface ScheduleProfileBlock {
+  id: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  genreId: string;
+  genreName: string;
+  genreColor: string;
+  genreIcon: string;
+}
+
+export interface ScheduleProfileListRow {
+  id: string;
+  name: string;
+  createdAt: string;
+  _count: { blocks: number };
+}
+
+export interface ScheduleProfileRow extends ScheduleProfileListRow {
+  blocks: ScheduleProfileBlock[];
+}
+
 export interface QueueItemView {
   mediaId: string;
   title: string;

@@ -188,6 +188,13 @@ export function useGradeSchedule() {
     }
   }, [doCreate, redoStack, qc]);
 
+  /** aplicações de perfil são trocas atômicas grandes — histórico local não faz sentido. */
+  const resetHistory = useCallback(() => {
+    setUndoStack([]);
+    setRedoStack([]);
+    setStatus({ kind: "idle" });
+  }, []);
+
   return {
     rows,
     isLoading: rowsQ.isLoading,
@@ -198,5 +205,6 @@ export function useGradeSchedule() {
     deleteBlock,
     undo: undoOp,
     redo: redoOp,
+    resetHistory,
   };
 }

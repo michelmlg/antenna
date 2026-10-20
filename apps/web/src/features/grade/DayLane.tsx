@@ -31,6 +31,8 @@ interface Props {
   onPickMove: (e: React.PointerEvent) => void;
   onPickUp: (e: React.PointerEvent) => void;
   onOpen: (row: ScheduleRow) => void;
+  onDuplicate: (row: ScheduleRow) => void;
+  onDelete: (row: ScheduleRow) => void;
 }
 
 export function DayLane({
@@ -51,6 +53,8 @@ export function DayLane({
   onPickMove,
   onPickUp,
   onOpen,
+  onDuplicate,
+  onDelete,
 }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: `lane-${dow}` });
 
@@ -102,6 +106,8 @@ export function DayLane({
             onPickUp={onPickUp}
             onPickMove={onPickMove}
             onOpen={onOpen}
+            onDuplicate={onDuplicate}
+            onDelete={onDelete}
           />
         ))}
         {guideMin !== null && (

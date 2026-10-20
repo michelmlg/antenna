@@ -14,6 +14,18 @@ import {
   type Modifier,
 } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
+import {
+  CalendarDays,
+  ChevronDown,
+  Copy,
+  Maximize,
+  Plus,
+  Redo2,
+  Trash2,
+  Undo2,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { Badge, Button, Card, Spinner } from "../../components/ui";
 import { api, type GenreRow, type PlayoutState, type ScheduleRow } from "../../lib/api";
 import {
@@ -32,7 +44,7 @@ import { useGradeSchedule, type MutationResult, type SchedulePatch } from "./use
 import { DayLane, type Preview } from "./DayLane";
 import { LibraryPanel, firstFreeSlot } from "./LibraryPanel";
 import { BlockModal, type ModalState } from "./BlockModal";
-import { PropertiesPanel } from "./PropertiesPanel";
+import { ProfilesMenu } from "./ProfilesMenu";
 import GradeMobile from "./GradeMobile";
 
 function useIsMobile(): boolean {
@@ -419,7 +431,7 @@ export default function Grade() {
         duplicate(selected);
       } else if (e.key.toLowerCase() === "n") {
         e.preventDefault();
-        setModal({ mode: "create" });
+        setModal({});
       } else if (e.key === "Escape") {
         setSelId(null);
       }
@@ -449,14 +461,30 @@ export default function Grade() {
   const byDay = DOWS.map((_, dow) =>
     rows.filter((r) => r.dayOfWeek === dow).sort((a, b) => toMin(a.startTime) - toMin(b.startTime)),
   );
+
+  // toast pós-apply de perfil (some sozinho)
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notify = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 6000);
+  }, []);
+
   const pill = sched.saving ? (
-    <Badge tone="signal">salvando…</Badge>
+    <Badge tone="signal">
+      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" /> salvando…
+    </Badge>
   ) : sched.status.kind === "error" ? (
     <span title={sched.status.msg ?? "falha ao salvar"}>
-      <Badge tone="red">falhou (desfeito)</Badge>
+      <Badge tone="red">
+        <span className="h-1.5 w-1.5 rounded-full bg-current" /> falhou (desfeito)
+      </Badge>
     </span>
   ) : sched.status.kind === "ok" ? (
-    <Badge tone="green">salvo</Badge>
+    <Badge tone="green">
+      <span className="h-1.5 w-1.5 rounded-full bg-current" /> salvo
+    </Badge>
   ) : (
     <Badge tone="muted">sem alterações</Badge>
   );
@@ -469,14 +497,19 @@ export default function Grade() {
         <div>
           <h1 className="text-xl font-bold">Grade de Programação</h1>
           <p className="text-xs text-muted">
-            arraste da biblioteca · corpo = mover · bordas = redimensionar · clique = propriedades ·
+            arraste da biblioteca · corpo = mover · bordas = redimensionar · clique = selecionar ·
             fora dos blocos: seleção automática
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {toast && (
+            <Badge tone="green">
+              <span className="h-1.5 w-1.5 rounded-full bg-current" /> {toast}
+            </Badge>
+          )}
           {pill}
           <div
-            className="flex items-center gap-0.5 rounded-lg border border-muted/10 bg-surface px-1 py-0.5"
+            className="flex items-center gap-0.5 rounded-lg border border-muted/10 bg-surface p-0.5 shadow-sm shadow-black/10"
             title="Desfazer (Ctrl+Z) / Refazer (Ctrl+Y)"
           >
             <Button
@@ -484,24 +517,36 @@ export default function Grade() {
               variant="ghost"
               onClick={() => void sched.undo()}
               disabled={sched.saving}
+              title="Desfazer (Ctrl+Z)"
             >
-              ⟲
+              <Undo2 size={14} />
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => void sched.redo()}
               disabled={sched.saving}
+              title="Refazer (Ctrl+Y)"
             >
-              ⟳
+              <Redo2 size={14} />
             </Button>
           </div>
+          <ProfilesMenu
+            onApplied={(orphans) => {
+              sched.resetHistory();
+              notify(
+                orphans
+                  ? `perfil aplicado — ${orphans} bloco(s) de gênero removido ficará na seleção automática`
+                  : "perfil aplicado — grade substituída",
+              );
+            }}
+          />
           <div
-            className="flex items-center gap-0.5 rounded-lg border border-muted/10 bg-surface px-1 py-0.5"
+            className="flex items-center gap-0.5 rounded-lg border border-muted/10 bg-surface p-0.5 shadow-sm shadow-black/10"
             title="Zoom da timeline"
           >
             <Button size="sm" variant="ghost" onClick={zoomOut} title="Menos zoom">
-              ⊖
+              <ZoomOut size={14} />
             </Button>
             <select
               id="grade-zoom"
@@ -519,26 +564,44 @@ export default function Grade() {
               ))}
             </select>
             <Button size="sm" variant="ghost" onClick={zoomIn} title="Mais zoom">
-              ⊕
+              <ZoomIn size={14} />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setZoom("auto")}
+              title="Ajustar a semana inteira na tela (auto)"
+              className={zoom === "auto" ? "text-signal" : ""}
+            >
+              <Maximize size={14} />
             </Button>
           </div>
-          <select
-            id="grade-goto"
-            name="grade-goto"
-            onChange={(e) => e.target.value && gotoDay(e.target.value)}
-            className="rounded-lg border border-muted/10 bg-surface px-2 py-1.5 text-xs"
-            defaultValue=""
-            title="Ir para o dia"
+          <div className="flex items-center gap-1 rounded-lg border border-muted/10 bg-surface px-2 py-1 shadow-sm shadow-black/10">
+            <CalendarDays size={13} className="text-muted" />
+            <select
+              id="grade-goto"
+              name="grade-goto"
+              onChange={(e) => e.target.value && gotoDay(e.target.value)}
+              className="border-0 bg-transparent p-0 text-xs"
+              defaultValue=""
+              title="Ir para o dia"
+            >
+              <option value="">ir p/ dia…</option>
+              {laneNames.map((n, i) => (
+                <option key={i} value={i}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            variant="signal"
+            onClick={() => setModal({ dow: now.dow })}
+            title="Programar bloco (N)"
           >
-            <option value="">ir p/ dia…</option>
-            {laneNames.map((n, i) => (
-              <option key={i} value={i}>
-                {n}
-              </option>
-            ))}
-          </select>
-          <Button variant="signal" onClick={() => setModal({ mode: "create", dow: now.dow })}>
-            + Programar
+            <span className="flex items-center gap-1.5">
+              <Plus size={14} /> Programar
+            </span>
           </Button>
         </div>
       </div>
@@ -558,7 +621,7 @@ export default function Grade() {
             <LibraryPanel
               open={libOpen}
               onToggle={() => setLibOpen((v) => !v)}
-              onNewBlock={() => setModal({ mode: "create" })}
+              onNewBlock={() => setModal({})}
             />
             <Card className="min-w-0 flex-1 p-0">
               <div
@@ -617,33 +680,26 @@ export default function Grade() {
                       onPickMove={onPickMove}
                       onPickUp={onPickUp}
                       onOpen={(row) => setSelId(row.id)}
+                      onDuplicate={duplicate}
+                      onDelete={(row) => {
+                        void deleteBlock(row);
+                        setSelId(null);
+                      }}
                     />
                   ))}
                 </div>
               </div>
               <div className="border-t border-muted/10 px-3 py-2 text-[11px] text-muted">
-                duplo-clique = editar · arrastar = mover · bordas = redimensionar · <kbd>N</kbd>{" "}
-                novo · <kbd>D</kbd> duplicar · <kbd>Del</kbd> excluir · <kbd>Ctrl+Z</kbd>/
+                arrastar = mover · bordas = redimensionar · clique = selecionar · <kbd>N</kbd> novo
+                · <kbd>D</kbd> duplicar · <kbd>Del</kbd> excluir · <kbd>Ctrl+Z</kbd>/
                 <kbd>Ctrl+Y</kbd>
               </div>
             </Card>
-            {selected && (
-              <PropertiesPanel
-                row={selected}
-                onEdit={updateTracked}
-                onDuplicate={duplicate}
-                onDelete={(row) => {
-                  void deleteBlock(row);
-                  setSelId(null);
-                }}
-                onClose={() => setSelId(null)}
-              />
-            )}
           </div>
           <DragOverlay dropAnimation={null}>
             {libActive ? (
               <div
-                className="rounded border bg-surface px-2 py-1.5 text-xs shadow-lg"
+                className="rounded-lg border bg-surface px-2 py-1.5 text-xs shadow-lg shadow-black/40"
                 style={{ borderLeft: `3px solid ${libActive.color}` }}
               >
                 {libActive.name}
@@ -654,13 +710,7 @@ export default function Grade() {
       )}
 
       {modal && (
-        <BlockModal
-          state={modal}
-          rows={rows}
-          onClose={() => setModal(null)}
-          onCreate={addBlock}
-          onEdit={updateBlock}
-        />
+        <BlockModal state={modal} rows={rows} onClose={() => setModal(null)} onCreate={addBlock} />
       )}
     </div>
   );
