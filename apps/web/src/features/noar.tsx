@@ -1,4 +1,5 @@
 /** No Ar — LivePlayer, agora tocando, fila estável (thumbs/gênero/canal/link), Pular. */
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Play, SkipForward } from "lucide-react";
 import {
@@ -20,18 +21,53 @@ function thumbOf(item: QueueItemView): string | null {
 }
 
 function Progress({ startedAt, duration }: { startedAt: string; duration: number }) {
-  const elapsed = Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000));
-  const pct = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
+  const [now, setNow] = useState(() => Date.now());
+
+  /**
+   * Relógio local de 1s — sem isto o tempo congela: o payload do playout não muda
+   * enquanto o mesmo item toca (structural sharing no TanStack Query), então o
+   * componente só repintaria na troca de item. O cálculo é de relógio de parede,
+   * igual ao do worker (playout.ts — fim do item por elapsed >= duration).
+   * O primeiro tick é ancorado na virada do segundo para o contador não atrasar.
+   */
+  useEffect(() => {
+    const read = () => setNow(Date.now());
+    read(); // troca de item: não espera o próximo tick para zerar a barra
+    let timer = window.setTimeout(() => {
+      read();
+      timer = window.setInterval(read, 1000);
+    }, 1000 - (Date.now() % 1000));
+    // aba em background throttliza o interval (~1/min) → repinta ao voltar ao foco
+    const onVisible = () => {
+      if (document.visibilityState === "visible") read();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [startedAt]);
+
+  const startMs = new Date(startedAt).getTime();
+  const total = Math.max(0, Math.round((now - startMs) / 1000));
+  const known = duration > 0;
+  // o worker só encerra no tick seguinte (até 5s + cooldown) → trava em 100% até trocar
+  const elapsed = known ? Math.min(total, duration) : total;
+  const pct = known ? Math.min(100, (elapsed / duration) * 100) : 0;
+
   return (
     <div className="mt-2">
-      <div className="h-1.5 overflow-hidden rounded bg-muted/20">
-        <div className="h-full bg-signal transition-all" style={{ width: `${pct}%` }} />
-      </div>
+      {known && (
+        <div className="h-1.5 overflow-hidden rounded bg-muted/20">
+          <div className="h-full bg-signal transition-all" style={{ width: `${pct}%` }} />
+        </div>
+      )}
       <div className="mt-1 flex justify-between text-[11px] text-muted">
         <span>{fmtDur(elapsed)}</span>
-        <span>
-          {duration > 0 ? `-${fmtDur(Math.max(0, duration - elapsed))}` : "duração desconhecida"}
-        </span>
+        <span>{known ? `-${fmtDur(Math.max(0, duration - elapsed))}` : "duração desconhecida"}</span>
       </div>
     </div>
   );
