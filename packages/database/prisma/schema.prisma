@@ -157,6 +157,37 @@ model ProgramSchedule {
   @@unique([programId, dayOfWeek, startTime])
 }
 
+// Perfil de programação: uma semana completa salva pelo usuário, aplicável em
+// substituição à grade atual a qualquer momento (troca de programação do canal).
+model ScheduleProfile {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  blocks    ScheduleProfileBlock[]
+
+  @@map("schedule_profile")
+}
+
+// Bloco de um perfil. Guarda SNAPSHOT do gênero (id + nome/cor/ícone) no
+// momento do save: se o gênero for apagado depois, o apply mantém o bloco
+// como programa-órfão (sem gênero) e o playout cai na seleção automática.
+model ScheduleProfileBlock {
+  id         String          @id @default(uuid())
+  profileId  String
+  profile    ScheduleProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  dayOfWeek  Int // 0 = domingo
+  startTime  String // "HH:MM"
+  endTime    String // "HH:MM"
+  genreId    String
+  genreName  String
+  genreColor String
+  genreIcon  String
+
+  @@index([profileId])
+  @@map("schedule_profile_block")
+}
+
+
 model PlaybackHistory {
   id         String    @id @default(uuid())
   mediaId    String

@@ -281,10 +281,18 @@ Aplicação das cores
 - Não usar gradientes fortes que reduzam a legibilidade dos títulos.
 - Os blocos devem mostrar o nome do gênero quando houver espaço; em
   blocos pequenos, usar truncamento e tooltip.
-- Ações de edição devem ser descobríveis, mas não poluir todos os
-  blocos.
-- O painel de propriedades deve ter agrupamento claro para dia,
-  início, fim, duração, duplicação e exclusão.
+- Não há painel lateral de propriedades: a edição é manipulando a
+  grade (arrastar, alças) e os mini-botões do bloco selecionado
+  (duplicar/excluir); atalhos de teclado cobrem o resto.
+- Bloco de gênero removido (após aplicar um perfil): fundo
+  desaturado, borda tracejada e tooltip explicando que o horário cai
+  na seleção automática.
+- A toolbar da grade é moderna e segmentada: undo/redo, perfis
+  (salvar grade atual, aplicar, excluir), zoom com botão "auto",
+  navegação por dia e ação primária de programar.
+- Perfis de programação: salvar a semana atual com um nome e aplicar
+  qualquer perfil para substituir a grade inteira (com confirmação);
+  aplicar reseta o undo/redo local.
 - O salvamento deve apresentar estados "salvando", "salvo" e "erro";
   erros devem permitir entender e corrigir o problema.
 - Undo/redo e atalhos de teclado devem permanecer disponíveis e ter

@@ -37,13 +37,19 @@ export type SourceFilters = z.infer<typeof sourceFiltersSchema>;
 export const genreCreateSchema = z.object({
   name: z.string().min(1).max(80),
   description: z.string().max(300).optional(),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
   icon: z.string().max(8).optional(),
 });
 export const genreUpdateSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   description: z.string().max(300).optional(),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
   icon: z.string().max(8).optional(),
   status: z.enum(["ativo", "pausado"]).optional(),
   antiRepeatWindow: z.number().int().min(1).max(100).optional(),
@@ -75,7 +81,9 @@ export const mixIngredientSchema = z.object({
   categoryName: z.string().max(80).nullable().optional(),
   count: z.number().int().min(1).max(10),
 });
-export const mixUpdateSchema = z.object({ ingredients: z.array(mixIngredientSchema).min(1).max(8) });
+export const mixUpdateSchema = z.object({
+  ingredients: z.array(mixIngredientSchema).min(1).max(8),
+});
 
 // ---------- grade ----------
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -92,6 +100,23 @@ export const scheduleUpdateSchema = z.object({
   endTime: hhmm.optional(),
 });
 
+// ---------- perfis de grade ----------
+export const scheduleProfileCreateSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  blocks: z
+    .array(
+      z.object({
+        dayOfWeek: z.number().int().min(0).max(6),
+        startTime: hhmm,
+        endTime: hhmm,
+        genreId: z.string().uuid(),
+      }),
+    )
+    .min(1)
+    .max(300),
+});
+export type ScheduleProfileCreate = z.infer<typeof scheduleProfileCreateSchema>;
+
 // ---------- playout ----------
 export const playNowSchema = z.object({ mediaId: z.string().uuid() });
 export const fallbackSchema = z.object({ mediaId: z.string().uuid().nullable() });
@@ -106,9 +131,7 @@ export const queueItemSchema = z.object({
   resolvedId: z.string().nullable(),
   channelTitle: z.string().nullable(),
   thumbnailUrl: z.string().nullable(),
-  genre: z
-    .object({ name: z.string(), color: z.string(), icon: z.string() })
-    .nullable(),
+  genre: z.object({ name: z.string(), color: z.string(), icon: z.string() }).nullable(),
 });
 export type QueueItem = z.infer<typeof queueItemSchema>;
 
