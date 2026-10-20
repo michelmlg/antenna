@@ -1,7 +1,7 @@
 /** No Ar — LivePlayer, agora tocando, fila estável (thumbs/gênero/canal/link), Pular. */
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Play, SkipForward } from "lucide-react";
+import { Check, ChevronRight, Copy, ExternalLink, Play, SkipForward } from "lucide-react";
 import {
   api,
   type HistoryRow,
@@ -18,6 +18,133 @@ function thumbOf(item: QueueItemView): string | null {
   if (item.thumbnailUrl) return item.thumbnailUrl;
   if (item.resolvedId) return `https://i.ytimg.com/vi/${item.resolvedId}/mqdefault.jpg`;
   return null;
+}
+
+/**
+ * URLs de transmissão do canal. HLS/M3U/XMLTV passam pela front door (nginx :3000
+ * — o /hls injeta o Bearer do hlsCDNSecret, sem o 302 de cookie-check); RTSP/RTMP
+ * saem direto do MediaMTX nas portas publicadas. O host vem da origem que o
+ * operador usou para abrir o painel: o `rtspPath` da API traz o placeholder
+ * "<ip-da-lan>", que não dá para copiar.
+ */
+type StreamLink = { label: string; who: string; url: string; http: boolean };
+
+function streamLinks(stream: StreamInfo): StreamLink[] {
+  const origin = location.origin;
+  const host = location.hostname;
+  return [
+    { label: "HLS", who: "navegador", url: `${origin}${stream.hlsPath}`, http: true },
+    { label: "RTSP", who: "VLC", url: `rtsp://${host}:8554/${stream.channel}`, http: false },
+    { label: "RTMP", who: "ffmpeg", url: `rtmp://${host}:1935/${stream.channel}`, http: false },
+    { label: "M3U", who: "Jellyfin", url: `${origin}/api/v1/iptv/channels.m3u`, http: true },
+    { label: "XMLTV", who: "guia EPG", url: `${origin}/api/v1/epg/guide.xml`, http: true },
+  ];
+}
+
+/** A Clipboard API só existe em contexto seguro — na LAN (http://ip) cai no execCommand. */
+function copyText(text: string): Promise<void> {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      if (document.execCommand("copy")) resolve();
+      else reject(new Error("cópia recusada"));
+    } catch (err) {
+      reject(err);
+    } finally {
+      document.body.removeChild(ta);
+    }
+  });
+}
+
+function CopyBtn({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(t);
+  }, [copied]);
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      className="shrink-0 px-1.5"
+      title={copied ? "Copiado" : "Copiar URL"}
+      onClick={() => {
+        copyText(url)
+          .then(() => setCopied(true))
+          .catch(() => setCopied(false));
+      }}
+    >
+      {copied ? <Check size={13} className="text-signal" /> : <Copy size={13} />}
+    </Button>
+  );
+}
+
+function StreamRow({ link }: { link: StreamLink }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-muted">
+        {link.label} <span className="text-muted/60">· {link.who}</span>
+      </span>
+      {link.http ? (
+        <a
+          href={link.url}
+          target="_blank"
+          rel="noreferrer"
+          title="Abrir em nova aba"
+          className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground transition-colors hover:text-signal"
+        >
+          {link.url}
+        </a>
+      ) : (
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground">
+          {link.url}
+        </span>
+      )}
+      <CopyBtn url={link.url} />
+    </div>
+  );
+}
+
+function StreamUrls({ stream }: { stream: StreamInfo | undefined }) {
+  if (!stream) {
+    return <div className="mt-3 text-[11px] text-muted">sem info de stream — API indisponível</div>;
+  }
+  const links = streamLinks(stream);
+  return (
+    <div className="mt-3 space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+          Transmissão
+        </span>
+        {stream.viewers != null && (
+          <span className="text-[11px] text-muted">{stream.viewers} assistindo</span>
+        )}
+      </div>
+      {/* essenciais sempre visíveis: HLS (player) + RTSP (VLC) */}
+      {links.slice(0, 2).map((l) => (
+        <StreamRow key={l.label} link={l} />
+      ))}
+      <details className="group">
+        <summary className="flex cursor-pointer list-none select-none items-center gap-1 text-[11px] text-muted transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+          <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
+          Outras formas de assistir (RTMP, M3U, XMLTV)
+        </summary>
+        <div className="mt-1.5 space-y-1.5">
+          {links.slice(2).map((l) => (
+            <StreamRow key={l.label} link={l} />
+          ))}
+        </div>
+      </details>
+    </div>
+  );
 }
 
 function Progress({ startedAt, duration }: { startedAt: string; duration: number }) {
@@ -189,15 +316,7 @@ export default function NoAr() {
       {/* player */}
       <Card className="xl:col-span-2">
         <LivePlayer src={hlsUrl} live={!!state?.running} mediaKey={cur?.mediaId} />
-        <div className="mt-3 space-y-1 text-xs text-muted">
-          <div>
-            HLS <code className="text-foreground">{hlsUrl || "—"}</code>
-          </div>
-          <div>
-            RTSP (VLC) <code className="text-foreground">{stream?.rtspPath || "—"}</code>
-            {stream?.viewers != null && <> · {stream.viewers} assistindo</>}
-          </div>
-        </div>
+        <StreamUrls stream={stream} />
       </Card>
 
       {/* agora + controles + fila */}
