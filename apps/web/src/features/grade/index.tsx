@@ -61,9 +61,10 @@ interface DragState {
 type Zoom = "auto" | number;
 const ZOOM_STEPS: number[] = [0.35, 0.75, 1.5, 3, 5];
 
-/** Modifier do dnd-kit: centraliza o chip arrastado NO CURSOR (a posição do
- * elemento traduzido deslocava a prévia — agora prévia e overlay miram o ponteiro). */
-const centerOnCursor: Modifier = ({ draggingNodeRect, transform, activatorEvent }) => {
+/** Modifier do dnd-kit: ancora o chip arrastado com a BORDA ESQUERDA no cursor
+ * (o bloco cai com o início onde você aponta — chip e ghost ficam alinhados) e
+ * centrado na vertical. */
+const anchorOnCursor: Modifier = ({ draggingNodeRect, transform, activatorEvent }) => {
   const base = transform ?? { x: 0, y: 0, scaleX: 1, scaleY: 1 };
   const ae = activatorEvent as PointerEvent | MouseEvent | null;
   if (!draggingNodeRect || !ae || ae.clientX == null) return base;
@@ -71,7 +72,7 @@ const centerOnCursor: Modifier = ({ draggingNodeRect, transform, activatorEvent 
   const curY = ae.clientY + base.y;
   return {
     ...base,
-    x: curX - (draggingNodeRect.left + draggingNodeRect.width / 2),
+    x: curX - draggingNodeRect.left,
     y: curY - (draggingNodeRect.top + draggingNodeRect.height / 2),
   };
 };
@@ -547,7 +548,7 @@ export default function Grade() {
       ) : (
         <DndContext
           sensors={sensors}
-          modifiers={[centerOnCursor]}
+          modifiers={[anchorOnCursor]}
           onDragStart={onDragStart}
           onDragMove={onDragMove}
           onDragEnd={onDragEnd}
