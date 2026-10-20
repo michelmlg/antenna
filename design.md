@@ -288,8 +288,9 @@ Aplicação das cores
   desaturado, borda tracejada e tooltip explicando que o horário cai
   na seleção automática.
 - A toolbar da grade é moderna e segmentada: undo/redo, perfis
-  (salvar grade atual, aplicar, excluir), zoom com botão "auto",
-  navegação por dia e ação primária de programar.
+  (salvar grade atual, aplicar, excluir, limpar grade), zoom com botão
+  "auto" e ação primária de programar. Sem filtro de dia — as sete
+  trilhas são sempre visíveis.
 - Perfis de programação: salvar a semana atual com um nome e aplicar
   qualquer perfil para substituir a grade inteira (com confirmação);
   aplicar reseta o undo/redo local.

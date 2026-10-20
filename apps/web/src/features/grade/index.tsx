@@ -14,18 +14,7 @@ import {
   type Modifier,
 } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
-import {
-  CalendarDays,
-  ChevronDown,
-  Copy,
-  Maximize,
-  Plus,
-  Redo2,
-  Trash2,
-  Undo2,
-  ZoomIn,
-  ZoomOut,
-} from "lucide-react";
+import { Maximize, Plus, Redo2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { Button, Card, Spinner } from "../../components/ui";
 import { api, type GenreRow, type PlayoutState, type ScheduleRow } from "../../lib/api";
 import {
@@ -465,18 +454,8 @@ export default function Grade() {
     return () => window.removeEventListener("keydown", onKey);
   }, [deleteBlock, duplicate, modal, sched, selected]);
 
-  // ---- navegação / zoom ----
-  const laneNames = useMemo(() => DOWS.map(([, full]) => full), []);
-  const [gotoLabel, setGotoLabel] = useState<string | null>(null);
-  const gotoDay = (dowStr: string) => {
-    const dow = Number(dowStr);
-    setGotoLabel(laneNames[dow]);
-    const el = tracksRef.current[dow];
-    const sc = scrollerRef.current;
-    if (el && sc) sc.scrollTo({ top: el.offsetTop - 34, behavior: "smooth" });
-  };
-
   // ---- zoom: escada de degraus (auto incluído) com âncora no centro da janela ----
+  const laneNames = useMemo(() => DOWS.map(([, full]) => full), []);
   // auto (~0.9) não é um degrau: ações sempre andam degrau a degrau e param nas pontas,
   // em vez de saltar (antes: menos-zoom no mínimo voltava pro auto, que AUMENTAVA o zoom)
   const anchorMin = useRef<number | null>(null);
@@ -639,17 +618,6 @@ export default function Grade() {
               <Maximize size={15} />
             </Button>
           </div>
-          <Dropdown
-            trigger={
-              <>
-                <CalendarDays size={14} className="text-muted" />
-                <span className="text-muted">{gotoLabel ?? "ir p/ dia…"}</span>
-              </>
-            }
-            options={laneNames.map((n, i) => ({ value: String(i), label: n }))}
-            onSelect={(v) => gotoDay(v)}
-            title="Ir para o dia"
-          />
           <Button
             variant="signal"
             className="flex h-8 items-center"
