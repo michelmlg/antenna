@@ -565,7 +565,7 @@ export default function NoAr() {
                 <span className="text-[11px] text-muted tnum">{queue.length} na fila</span>
               )}
             </div>
-            <div className="mt-2 min-h-0 max-h-[220px] flex-1 overflow-y-auto pr-0.5 xl:max-h-none">
+            <div className="mt-2 min-h-0 max-h-[220px] flex-1 overflow-y-auto pr-0.5 xl:max-h-[300px]">
               <Rundown items={queue} onPlay={(id) => play.mutate(id)} />
             </div>
             <div className="mt-3 shrink-0 space-y-0.5 border-t border-muted/10 pt-2 text-[11px] text-muted">
