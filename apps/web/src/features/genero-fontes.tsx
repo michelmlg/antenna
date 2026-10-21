@@ -57,12 +57,20 @@ export const hasChannelQuery = (s: { type: string; query: string }): boolean =>
 // ---------- grid de vídeos (CRUD inline) ----------
 function MediaCard({ m, onDelete }: { m: MediaLite & { status: string }; onDelete?: () => void }) {
   const thumb = thumbOfMedia(m);
+  const [broken, setBroken] = useState(false);
+  const showImg = thumb && !broken;
   return (
     <div
       className={`group relative overflow-hidden rounded border border-muted/10 bg-background/40 ${m.status === "inativo" ? "opacity-45" : ""}`}
     >
-      {thumb ? (
-        <img src={thumb} alt="" loading="lazy" className="aspect-video w-full object-cover" />
+      {showImg ? (
+        <img
+          src={thumb}
+          alt=""
+          loading="lazy"
+          onError={() => setBroken(true)}
+          className="aspect-video w-full object-cover"
+        />
       ) : (
         <div className="flex aspect-video items-center justify-center bg-muted/10 text-[10px] text-muted">
           {m.source}
