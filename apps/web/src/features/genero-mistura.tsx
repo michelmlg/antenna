@@ -3,7 +3,17 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Play, Plus, Trash2 } from "lucide-react";
 import { api, type GenreDetail, type MixIngredientRow } from "../lib/api";
-import { Badge, Button, Card, Empty, ErrorMsg, Field, Spinner, fmtDur } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Dropdown,
+  Empty,
+  ErrorMsg,
+  Field,
+  Spinner,
+  fmtDur,
+} from "../components/ui";
 
 interface DraftIngredient {
   scope: MixIngredientRow["scope"];
@@ -55,7 +65,7 @@ export function Mistura({ genre }: { genre: GenreDetail }) {
     <Card className="mt-4">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted">Mistura</div>
+          <div className="text-[11px] font-semibold text-muted">Mistura</div>
           <p className="text-[11px] text-muted">
             A sequência segue este padrão em ciclo, respeitando a janela anti-repetição (
             {genre.antiRepeatWindow}).
@@ -216,19 +226,18 @@ export function Simulador({ genreId }: { genreId: string }) {
     <Card className="mt-4">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted">Simulador</div>
+          <div className="text-[11px] font-semibold text-muted">Simulador</div>
           <p className="text-[11px] text-muted">
             Projeta a sequência com as regras atuais (não interfere no ar).
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <select value={count} onChange={(e) => setCount(Number(e.target.value))} className="w-20">
-            {[4, 8, 12, 20].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
+          <Dropdown
+            trigger={<span className="text-xs">{count} itens</span>}
+            activeValue={String(count)}
+            onSelect={(v) => setCount(Number(v))}
+            options={[4, 8, 12, 20].map((n) => ({ value: String(n), label: `${n} itens` }))}
+          />
           <Button
             variant="signal"
             size="sm"

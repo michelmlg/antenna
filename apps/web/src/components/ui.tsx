@@ -222,7 +222,7 @@ export function Field({
 }) {
   return (
     <label className="flex flex-col gap-1 text-xs text-muted">
-      <span className="uppercase tracking-wide">{label}</span>
+      <span className="font-medium">{label}</span>
       {children}
       {hint && <span className="text-[11px] normal-case">{hint}</span>}
     </label>

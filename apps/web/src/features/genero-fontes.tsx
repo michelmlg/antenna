@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   MonitorPlay,
@@ -111,7 +112,7 @@ export function SourceMediaGrid({
     const withItem = manual.map((m) => ({ ...m, status: m.status ?? "ativo" }));
     return (
       <div className="px-3 pb-3 pt-1">
-        <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted">
+        <div className="mb-1.5 text-[11px] font-medium text-muted">
           Adicionados manualmente ({withItem.length})
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
@@ -446,7 +447,7 @@ export function SourceBlock({
           )}
           <Icon size={16} className="shrink-0 text-signal" />
           <span className="line-clamp-1 text-sm font-medium">{label}</span>
-          <span className="shrink-0 text-[11px] text-muted">
+          <span className="shrink-0 text-[11px] text-muted tnum">
             limite {s.limit} · {s.sort === "oldest" ? "mais antigos" : "recentes"} · último sync{" "}
             {s.lastSyncAt
               ? new Date(s.lastSyncAt).toLocaleString("pt-BR", {
@@ -496,7 +497,14 @@ export function SourceBlock({
           ))}
         </div>
       )}
-      {s.lastError && <div className="px-3 pb-2 text-[11px] text-danger">⚠ {s.lastError}</div>}
+      {s.lastError && (
+        <div className="px-3 pb-2">
+          <div className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/5 px-2.5 py-1.5 text-[11px] leading-relaxed text-danger">
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+            <span className="min-w-0 break-words">{s.lastError}</span>
+          </div>
+        </div>
+      )}
 
       {open && <SourceMediaGrid genreId={genreId} sid={s.id} />}
       {filters && <FiltersModal source={s} genreId={genreId} onClose={() => setFilters(false)} />}
@@ -523,9 +531,7 @@ export function AddSourceBar({ genreId }: { genreId: string }) {
 
   return (
     <Card>
-      <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">
-        Adicionar fonte
-      </div>
+      <div className="mb-3 text-[11px] font-semibold text-muted">Adicionar fonte</div>
       <div className="mb-3 flex flex-wrap gap-1.5">
         {(
           [
