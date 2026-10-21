@@ -13,7 +13,10 @@ describe("normalizeFilters", () => {
   });
 
   it("limita listas e clamp inteiros", () => {
-    const f = normalizeFilters({ titleHas: ["a", "b", "c", "d", "e", "f", "g", "h", "i"], minDur: 99999 });
+    const f = normalizeFilters({
+      titleHas: ["a", "b", "c", "d", "e", "f", "g", "h", "i"],
+      minDur: 99999,
+    });
     expect(f.titleHas).toHaveLength(8);
     expect(f.minDur).toBe(1440);
   });
@@ -85,6 +88,60 @@ describe("passes — regra de ouro (dado faltando = passa)", () => {
   it("data faltando não derruba (busca sem data continua útil)", () => {
     const f = normalizeFilters({ dateMode: "older", olderYears: 5 });
     expect(passes({}, f, NEVER)).toBe(true);
+  });
+});
+
+describe("passes — matriz completa de filtros de conteúdo", () => {
+  it("titleHas: qualquer um dos termos (OR), case-insensitive", () => {
+    const f = normalizeFilters({ titleHas: "SORTILÉGIO, aquascape" });
+    expect(passes({ title: "Como fazer AQUASCAPE" }, f)).toBe(true); // 2º termo
+    expect(passes({ title: "A SORTILÉGIO" }, f)).toBe(true); // 1º termo
+    expect(passes({ title: "nada relacionado" }, f)).toBe(false);
+  });
+
+  it("titleLacks: qualquer termo presente descarta", () => {
+    const f = normalizeFilters({ titleLacks: "shorts,直播" });
+    expect(passes({ title: "Vlog normal" }, f)).toBe(true);
+    expect(passes({ title: "reação a SHORTS" }, f)).toBe(false);
+    expect(passes({ title: "tem 直播 aqui" }, f)).toBe(false); // 2º termo também corta
+  });
+
+  it("duração precisa ficar na banda [min, max]", () => {
+    const f = normalizeFilters({ minDur: 5, maxDur: 20 });
+    expect(passes({ duration: 5 * 60 }, f)).toBe(true); // limite inclusivo
+    expect(passes({ duration: 20 * 60 }, f)).toBe(true); // limite inclusivo
+    expect(passes({ duration: 4 * 60 + 59 }, f)).toBe(false);
+    expect(passes({ duration: 20 * 60 + 1 }, f)).toBe(false);
+    expect(passes({ duration: 0 }, f)).toBe(true); // desconhecida passa por cima de ambos
+  });
+
+  it("maxViews corta acima do teto", () => {
+    const f = normalizeFilters({ maxViews: 1000 });
+    expect(passes({ view_count: 1000 }, f)).toBe(true); // limite inclusivo
+    expect(passes({ view_count: 1001 }, f)).toBe(false);
+    expect(passes({ views: null }, f)).toBe(true); // desconhecida passa
+  });
+
+  it("faixa de anos funciona com os extremos trocados", () => {
+    const f = normalizeFilters({ dateMode: "range", yearFrom: 2020, yearTo: 2015 });
+    expect(passes({ uploadDate: "20170510" }, f, NEVER)).toBe(true);
+    expect(passes({ uploadDate: "20130101" }, f, NEVER)).toBe(false);
+    expect(passes({ uploadDate: "20240101" }, f, NEVER)).toBe(false);
+  });
+
+  it("older corta exatamente no dia do corte", () => {
+    const f = normalizeFilters({ dateMode: "older", olderYears: 1 });
+    const cut = NEVER - 365.25 * 864e5;
+    expect(passes({ uploadDate: new Date(cut) }, f, NEVER)).toBe(true); // no corte = antigo o bastante
+    expect(passes({ uploadDate: new Date(cut + 864e5) }, f, NEVER)).toBe(false);
+  });
+
+  it("filtros combinam com AND", () => {
+    const f = normalizeFilters({ titleHas: "plantado", minDur: 5, excludeShorts: true });
+    expect(passes({ title: "como PLANTAROR título: plantado", duration: 10 * 60 }, f)).toBe(true);
+    expect(passes({ title: "outro", duration: 10 * 60 }, f)).toBe(false); // falha só no título
+    expect(passes({ title: "plantado", duration: 10 * 60 }, f)).toBe(true);
+    expect(passes({ title: "plantado", duration: 10 * 60, live_status: "is_live" }, f)).toBe(true); // sem excludeLive, live passa
   });
 });
 
