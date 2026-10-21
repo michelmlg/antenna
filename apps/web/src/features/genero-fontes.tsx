@@ -552,7 +552,7 @@ export function SourceBlock({
           <Icon size={16} className="shrink-0 text-signal" />
           <span className="line-clamp-1 text-sm font-medium">{sourceLabelOf(s)}</span>
           {inChannelSearch && <Badge tone="signal">busca "{s.query}"</Badge>}
-          <span className="shrink-0 text-[11px] text-muted tnum">
+          <span className="shrink-0 text-[11px] text-muted tnum max-sm:hidden">
             limite {s.limit} · {s.sort === "oldest" ? "mais antigos" : "recentes"} · último sync{" "}
             {s.lastSyncAt
               ? new Date(s.lastSyncAt).toLocaleString("pt-BR", {
