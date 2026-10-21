@@ -373,11 +373,26 @@ function TodayRuler({ rows }: { rows: ScheduleRow[] }) {
   );
 }
 
-/** Saúde — diagnóstico compacto do worker. */
+/** Saúde — estado do canal + diagnóstico do worker. */
 function Health({ state, pid }: { state: PlayoutState | undefined; pid: number | null }) {
   const offline = state?.workerOnline === false;
+  const cur = state?.current;
   return (
     <dl className="space-y-2 text-sm">
+      {/* canal no ar/parado — era o card de status, foi junto das tabs */}
+      <div className="flex items-center justify-between gap-2">
+        <dt className="text-muted">canal</dt>
+        <dd className="flex min-w-0 items-center gap-2">
+          {cur?.isFallback && <Badge tone="red">fallback</Badge>}
+          {cur?.programName && (
+            <span className="truncate text-xs font-medium text-signal">{cur.programName}</span>
+          )}
+          <span className="flex shrink-0 items-center gap-1.5">
+            <i className={`h-2 w-2 rounded-full ${state?.running ? "bg-signal" : "bg-muted/60"}`} />
+            {state?.running ? "no ar" : "parado"}
+          </span>
+        </dd>
+      </div>
       <div className="flex items-center justify-between">
         <dt className="text-muted">worker</dt>
         <dd className="flex items-center gap-1.5">
@@ -540,23 +555,8 @@ export default function NoAr() {
           </div>
         </Card>
 
-        {/* ---------- rail: fila comprimida + tabs (esticados na altura do player) ---------- */}
+        {/* ---------- rail: fila comprimida + tabs, casando com o player ---------- */}
         <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-[380px] xl:min-h-0">
-          <Card className="min-h-0 shrink-0">
-            <div className="flex flex-wrap items-center gap-2">
-              {cur ? (
-                <Badge tone="signal">● AO VIVO</Badge>
-              ) : (
-                <Badge>{running ? "sintonizando…" : "○ parado"}</Badge>
-              )}
-              {cur?.isFallback && <Badge tone="red">fallback</Badge>}
-              {state?.workerOnline === false && <Badge tone="red">worker offline</Badge>}
-              {cur?.programName && (
-                <span className="ml-auto text-xs font-medium text-signal">{cur.programName}</span>
-              )}
-            </div>
-          </Card>
-
           <Card className="min-h-0 shrink-0">
             <div className="flex items-baseline justify-between">
               <span className="text-[11px] font-semibold text-muted">A seguir</span>
@@ -565,7 +565,7 @@ export default function NoAr() {
               )}
             </div>
             {/* fila sob demanda: é menor que o player, então scroll interno */}
-            <div className="mt-2 max-h-[220px] overflow-y-auto pr-0.5 xl:max-h-[320px]">
+            <div className="mt-2 max-h-[190px] overflow-y-auto pr-0.5 xl:max-h-[240px]">
               <Rundown items={queue} onPlay={(id) => play.mutate(id)} />
             </div>
             <div className="mt-3 space-y-0.5 border-t border-muted/10 pt-2 text-[11px] text-muted">
