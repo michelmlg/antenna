@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Play, Plus, Trash2 } from "lucide-react";
 import { api, type GenreDetail, type MixIngredientRow } from "../lib/api";
+import { sourceLabelOf } from "./genero-fontes";
 import {
   Badge,
   Button,
@@ -124,9 +125,7 @@ export function Mistura({ genre }: { genre: GenreDetail }) {
                   <option value="">— escolha a fonte —</option>
                   {genre.sources.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.type === "search" || s.type === "channelSearch"
-                        ? `busca "${s.query}"`
-                        : s.url.replace("https://www.youtube.com/", "")}
+                      {sourceLabelOf(s)}
                     </option>
                   ))}
                 </select>

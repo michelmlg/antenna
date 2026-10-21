@@ -47,9 +47,9 @@ function Identidade({ g }: { g: GenreDetail }) {
 
   return (
     <Card>
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+      <div className="flex flex-wrap items-end gap-y-3">
         {/* identidade visual: ícone, nome e cor — como o gênero aparece no canal */}
-        <div className="flex items-end gap-3">
+        <div className="flex items-end gap-3 lg:pr-7">
           <div className="relative">
             <button
               type="button"
@@ -103,7 +103,7 @@ function Identidade({ g }: { g: GenreDetail }) {
         </div>
 
         {/* comportamento: como a seleção escolhe vídeos */}
-        <div className="flex items-end gap-3 border-l border-muted/10 pl-6 max-md:border-l-0 max-md:pl-0">
+        <div className="flex items-end gap-3 lg:border-l lg:border-muted/10 lg:px-7">
           <Field label="Seleção">
             <select
               value={d.orderingPadrao}
@@ -139,7 +139,7 @@ function Identidade({ g }: { g: GenreDetail }) {
           </Field>
         </div>
 
-        <div className="flex flex-col items-start gap-1.5">
+        <div className="flex flex-col items-start gap-1.5 lg:border-l lg:border-muted/10 lg:pl-7">
           <Button
             variant={dirty ? "signal" : "default"}
             disabled={!dirty || save.isPending}
@@ -160,7 +160,7 @@ function Identidade({ g }: { g: GenreDetail }) {
 export default function GeneroDetalhe() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
-  const [openSid, setOpenSid] = useState<string | null>(null);
+  const [openSids, setOpenSids] = useState<Set<string>>(new Set());
   const { data: g } = useQuery({
     queryKey: ["genre", id],
     queryFn: () => api.get<GenreDetail>(`/genres/${id}`),
@@ -171,24 +171,44 @@ export default function GeneroDetalhe() {
     onSuccess: () => navigate("/generos"),
   });
 
+  const toggleSid = (sid: string) =>
+    setOpenSids((cur) => {
+      const next = new Set(cur);
+      if (next.has(sid)) next.delete(sid);
+      else next.add(sid);
+      return next;
+    });
+
   if (!g) return <Spinner />;
   const manual = g.items.map((it) => ({ ...it.media, itemId: it.id }));
+  const allOpen = openSids.size === g.sources.length && g.sources.length > 0;
 
   return (
     <div className="space-y-4">
-      {/* cabeçalho */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/generos")}>
+      {/* cabeçalho: conteúdo à esquerda, contagem + excluir à direita */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/generos")}
+          title="Voltar para Gêneros"
+        >
           <ArrowLeft size={15} />
         </Button>
-        <h1 className="text-xl font-bold">{g.name}</h1>
+        <span
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+          style={{ background: g.color + "22", color: g.color }}
+        >
+          <GenreIcon name={g.icon} size={16} />
+        </span>
+        <h1 className="line-clamp-1 text-xl font-bold">{g.name}</h1>
         {g.status === "pausado" ? (
           <Badge tone="red">pausado</Badge>
         ) : (
           <Badge tone="green">ativo</Badge>
         )}
-        <div className="ml-auto flex items-center gap-3 text-xs text-muted">
-          <span>{g.pool.expanded.length} vídeos sincronizados</span>
+        <div className="ml-auto flex items-center gap-3 text-[11px] text-muted">
+          <span className="tnum">{g.pool.expanded.length} vídeos sincronizados</span>
           <Button
             variant="danger"
             size="sm"
@@ -206,9 +226,22 @@ export default function GeneroDetalhe() {
       {/* adicionar fonte (em cima) */}
       <AddSourceBar genreId={g.id} />
 
-      {/* gestão de fontes (embaixo) */}
+      {/* gestão de fontes (embaixo) — blocos independentes, vários abertos */}
       <div>
-        <div className="mb-2 text-[11px] font-semibold text-muted">Fontes ({g.sources.length})</div>
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-muted tnum">
+            Fontes ({g.sources.length})
+          </span>
+          {g.sources.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setOpenSids(allOpen ? new Set() : new Set(g.sources.map((s) => s.id)))}
+            >
+              {allOpen ? "recolher tudo" : "expandir tudo"}
+            </Button>
+          )}
+        </div>
         {g.sources.length === 0 ? (
           <Empty>Nenhuma fonte — adicione canais ou buscas acima.</Empty>
         ) : (
@@ -218,8 +251,8 @@ export default function GeneroDetalhe() {
                 key={s.id}
                 s={s}
                 genreId={g.id}
-                open={openSid === s.id}
-                onToggleOpen={() => setOpenSid((cur) => (cur === s.id ? null : s.id))}
+                open={openSids.has(s.id)}
+                onToggleOpen={() => toggleSid(s.id)}
               />
             ))}
             {/* vídeos manuais */}

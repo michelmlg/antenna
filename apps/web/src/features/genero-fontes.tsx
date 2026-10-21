@@ -1,8 +1,14 @@
-/** Fontes do gênero: barra de adição, bloco por fonte com CRUD de vídeos (grid de thumbs) e filtros. */
+/**
+ * Fontes do gênero: barra de adição (canal/busca/vídeo manual), bloco por fonte
+ * com CRUD de vídeos (grid de thumbs), busca dentro do canal e filtros por fonte.
+ * Busca dentro do canal = coluna query da fonte — o sync lista a página de busca
+ * do canal (playout/sync.ts). Filtros pós-listagem aplicam no sync e na seleção.
+ */
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Check,
   ChevronDown,
   ChevronRight,
   MonitorPlay,
@@ -35,6 +41,18 @@ export function thumbOfMedia(m: {
   if (m.resolvedId) return `https://i.ytimg.com/vi/${m.resolvedId}/mqdefault.jpg`;
   return null;
 }
+
+/** Rótulo da fonte na mistura/simulador — canal com busca aparece como "busca". */
+export function sourceLabelOf(s: Pick<SourceRow, "type" | "url" | "query">): string {
+  if (s.type === "search") return `busca "${s.query}"`;
+  return (
+    s.url.replace("https://www.youtube.com/", "").replace(/\/(videos|search)$/i, "") || "vídeo"
+  );
+}
+
+/** busca interna aceita em canal (e no tipo legado channelSearch) */
+export const hasChannelQuery = (s: { type: string; query: string }): boolean =>
+  s.type === "channel" || s.type === "channelSearch";
 
 // ---------- grid de vídeos (CRUD inline) ----------
 function MediaCard({ m, onDelete }: { m: MediaLite & { status: string }; onDelete?: () => void }) {
@@ -142,7 +160,7 @@ export function SourceMediaGrid({
 
   return (
     <div className="px-3 pb-3 pt-1">
-      <div className="mb-1.5 text-[11px] text-muted">
+      <div className="mb-1.5 text-[11px] text-muted tnum">
         {activeCount} ativos de {items.length} nesta fonte
       </div>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-6">
@@ -175,7 +193,7 @@ export function SourceMediaGrid({
 }
 
 // ---------- editor de filtros ----------
-export interface FiltersDraft {
+interface FiltersDraft {
   titleHas?: string;
   titleLacks?: string;
   minDur?: number | null;
@@ -191,6 +209,13 @@ export interface FiltersDraft {
   newerMonths?: number | null;
 }
 
+const DATE_MODES: [string, string][] = [
+  ["any", "qualquer"],
+  ["range", "faixa de anos"],
+  ["older", "mais antigo que"],
+  ["newer", "mais novo que"],
+];
+
 export function FiltersModal({
   source,
   genreId,
@@ -202,6 +227,9 @@ export function FiltersModal({
 }) {
   const qc = useQueryClient();
   const f = (source.filters || {}) as FiltersDraft;
+  const isChannel = hasChannelQuery(source);
+  const savedCount = (source.filterChips || []).length;
+  const [query, setQuery] = useState(source.query);
   const [d, setD] = useState<FiltersDraft>({
     titleHas: (f.titleHas as string[] | undefined)?.join(", ") || "",
     titleLacks: (f.titleLacks as string[] | undefined)?.join(", ") || "",
@@ -217,6 +245,7 @@ export function FiltersModal({
     olderYears: f.olderYears ?? 10,
     newerMonths: f.newerMonths ?? 12,
   });
+  const [saved, setSaved] = useState(false);
 
   const save = useMutation({
     mutationFn: () => {
@@ -238,6 +267,8 @@ export function FiltersModal({
         d.excludeLive ||
         d.dateMode !== "any";
       return api.put(`/genres/${genreId}/sources/${source.id}`, {
+        // canal guarda a busca na própria fonte (o sync lista a aba de busca do canal)
+        ...(isChannel ? { query: query.trim() } : {}),
         filters: any
           ? {
               titleHas: list(d.titleHas),
@@ -259,131 +290,198 @@ export function FiltersModal({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["genre", genreId] });
-      onClose();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
     },
   });
 
   const num = (v: string) => (v === "" ? null : Number(v));
+  const sectionLabel = "text-[11px] font-semibold text-muted";
+  const anyFilter = savedCount > 0 || !!query.trim();
 
   return (
     <Modal title="Filtros da fonte" onClose={onClose}>
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Título contém (vírgulas)" hint="qualquer um dos termos">
-            <input
-              value={d.titleHas}
-              onChange={(e) => setD({ ...d, titleHas: e.target.value })}
-              className="w-full"
-            />
-          </Field>
-          <Field label="Título NÃO contém">
-            <input
-              value={d.titleLacks}
-              onChange={(e) => setD({ ...d, titleLacks: e.target.value })}
-              className="w-full"
-            />
-          </Field>
-          <Field label="Duração mín (min)">
-            <input
-              type="number"
-              value={d.minDur ?? ""}
-              onChange={(e) => setD({ ...d, minDur: num(e.target.value) })}
-            />
-          </Field>
-          <Field label="Duração máx (min)">
-            <input
-              type="number"
-              value={d.maxDur ?? ""}
-              onChange={(e) => setD({ ...d, maxDur: num(e.target.value) })}
-            />
-          </Field>
-          <Field label="Views mín">
-            <input
-              type="number"
-              value={d.minViews ?? ""}
-              onChange={(e) => setD({ ...d, minViews: num(e.target.value) })}
-            />
-          </Field>
-          <Field label="Views máx">
-            <input
-              type="number"
-              value={d.maxViews ?? ""}
-              onChange={(e) => setD({ ...d, maxViews: num(e.target.value) })}
-            />
-          </Field>
+      <div className="space-y-1">
+        <div className="flex items-center justify-between pb-1">
+          <div className="min-w-0 truncate text-xs text-muted">
+            {sourceLabelOf(source)}
+            {anyFilter && <span className="tnum"> · {anyFilter} filtro(s) ativo(s)</span>}
+          </div>
         </div>
-        <div className="flex gap-5 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={d.excludeShorts}
-              onChange={(e) => setD({ ...d, excludeShorts: e.target.checked })}
-            />
-            excluir shorts (&lt;60s)
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={d.excludeLive}
-              onChange={(e) => setD({ ...d, excludeLive: e.target.checked })}
-            />
-            excluir ao vivo
-          </label>
+
+        {/* busca no canal — só faz sentido em fontes de canal */}
+        {isChannel && (
+          <div className="rounded-lg border border-muted/10 bg-background/40 p-3">
+            <div className={sectionLabel}>Busca dentro do canal</div>
+            <div className="mt-1.5">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="termo de busca — vazio traz o canal inteiro"
+                className="w-full"
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-muted">
+              ao sincronizar, entra na página de busca do canal em vez dos uploads recentes
+            </p>
+          </div>
+        )}
+
+        {/* título */}
+        <div className="rounded-lg border border-muted/10 bg-background/40 p-3">
+          <div className={sectionLabel}>Título</div>
+          <div className="mt-2 grid gap-3">
+            <Field label="Título contém" hint="qualquer um dos termos, separados por vírgula">
+              <input
+                value={d.titleHas}
+                onChange={(e) => setD({ ...d, titleHas: e.target.value })}
+                placeholder="plantio, aquascape"
+                className="w-full"
+              />
+            </Field>
+            <Field label="Título não contém" hint="descarta se contiver qualquer dos termos">
+              <input
+                value={d.titleLacks}
+                onChange={(e) => setD({ ...d, titleLacks: e.target.value })}
+                className="w-full"
+              />
+            </Field>
+          </div>
         </div>
-        <div className="grid grid-cols-3 items-end gap-3">
-          <Field label="Data">
-            <select value={d.dateMode} onChange={(e) => setD({ ...d, dateMode: e.target.value })}>
-              <option value="any">qualquer</option>
-              <option value="range">faixa de anos</option>
-              <option value="older">mais antigo que</option>
-              <option value="newer">mais novo que</option>
-            </select>
-          </Field>
+
+        {/* duração + views */}
+        <div className="rounded-lg border border-muted/10 bg-background/40 p-3">
+          <div className={sectionLabel}>Duração e views</div>
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <Field label="Duração mín (min)">
+              <input
+                type="number"
+                value={d.minDur ?? ""}
+                onChange={(e) => setD({ ...d, minDur: num(e.target.value) })}
+              />
+            </Field>
+            <Field label="Duração máx (min)">
+              <input
+                type="number"
+                value={d.maxDur ?? ""}
+                onChange={(e) => setD({ ...d, maxDur: num(e.target.value) })}
+              />
+            </Field>
+            <Field label="Views mín">
+              <input
+                type="number"
+                value={d.minViews ?? ""}
+                onChange={(e) => setD({ ...d, minViews: num(e.target.value) })}
+              />
+            </Field>
+            <Field label="Views máx">
+              <input
+                type="number"
+                value={d.maxViews ?? ""}
+                onChange={(e) => setD({ ...d, maxViews: num(e.target.value) })}
+              />
+            </Field>
+          </div>
+        </div>
+
+        {/* cortes rápidos */}
+        <div className="rounded-lg border border-muted/10 bg-background/40 p-3">
+          <div className={sectionLabel}>Cortes</div>
+          <div className="mt-2 flex gap-5 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={d.excludeShorts}
+                onChange={(e) => setD({ ...d, excludeShorts: e.target.checked })}
+              />
+              excluir shorts (&lt;60s)
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={d.excludeLive}
+                onChange={(e) => setD({ ...d, excludeLive: e.target.checked })}
+              />
+              excluir ao vivo
+            </label>
+          </div>
+        </div>
+
+        {/* data */}
+        <div className="rounded-lg border border-muted/10 bg-background/40 p-3">
+          <div className={sectionLabel}>Data de publicação</div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {DATE_MODES.map(([k, label]) => (
+              <Button
+                key={k}
+                size="sm"
+                variant={d.dateMode === k ? "signal" : "default"}
+                onClick={() => setD({ ...d, dateMode: k })}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
           {d.dateMode === "range" && (
-            <>
-              <Field label="De">
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <Field label="De (ano)">
                 <input
                   type="number"
                   value={d.yearFrom ?? ""}
                   onChange={(e) => setD({ ...d, yearFrom: num(e.target.value) })}
                 />
               </Field>
-              <Field label="Até">
+              <Field label="Até (ano)">
                 <input
                   type="number"
                   value={d.yearTo ?? ""}
                   onChange={(e) => setD({ ...d, yearTo: num(e.target.value) })}
                 />
               </Field>
-            </>
+            </div>
           )}
           {d.dateMode === "older" && (
-            <Field label="Anos">
-              <input
-                type="number"
-                value={d.olderYears ?? ""}
-                onChange={(e) => setD({ ...d, olderYears: num(e.target.value) })}
-              />
-            </Field>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <Field label="Mais antigo que (anos)">
+                <input
+                  type="number"
+                  value={d.olderYears ?? ""}
+                  onChange={(e) => setD({ ...d, olderYears: num(e.target.value) })}
+                />
+              </Field>
+            </div>
           )}
           {d.dateMode === "newer" && (
-            <Field label="Meses">
-              <input
-                type="number"
-                value={d.newerMonths ?? ""}
-                onChange={(e) => setD({ ...d, newerMonths: num(e.target.value) })}
-              />
-            </Field>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <Field label="Mais novo que (meses)">
+                <input
+                  type="number"
+                  value={d.newerMonths ?? ""}
+                  onChange={(e) => setD({ ...d, newerMonths: num(e.target.value) })}
+                />
+              </Field>
+            </div>
           )}
         </div>
-        <p className="text-[11px] text-muted">
+
+        <p className="pt-1 text-[11px] text-muted">
           Regra de ouro: dado faltando = passa (o filtro nunca derruba vídeo por falta de
-          informação).
+          informação). Filtros valem nos syncs novos e na seleção do ar.
         </p>
         <ErrorMsg error={save.error} />
-        <Button variant="signal" onClick={() => save.mutate()} disabled={save.isPending}>
-          Salvar filtros
-        </Button>
+        <div className="flex justify-end gap-2 pt-1">
+          {saved && (
+            <span className="flex items-center text-[11px] text-emerald-400">
+              <Check size={12} /> salvo
+            </span>
+          )}
+          <Button variant="ghost" onClick={onClose}>
+            Fechar
+          </Button>
+          <Button variant="signal" onClick={() => save.mutate()} disabled={save.isPending}>
+            {save.isPending ? "salvando…" : "Salvar"}
+          </Button>
+        </div>
       </div>
     </Modal>
   );
@@ -432,10 +530,7 @@ export function SourceBlock({
   });
 
   const Icon = TYPE_ICON[s.type] ?? MonitorPlay;
-  const label =
-    s.type === "search" || s.type === "channelSearch"
-      ? `busca "${s.query}"`
-      : s.url.replace("https://www.youtube.com/", "");
+  const inChannelSearch = hasChannelQuery(s) && !!s.query;
 
   return (
     <div className="rounded-lg border border-muted/10 bg-surface">
@@ -447,7 +542,8 @@ export function SourceBlock({
             <ChevronRight size={16} className="shrink-0 text-muted" />
           )}
           <Icon size={16} className="shrink-0 text-signal" />
-          <span className="line-clamp-1 text-sm font-medium">{label}</span>
+          <span className="line-clamp-1 text-sm font-medium">{sourceLabelOf(s)}</span>
+          {inChannelSearch && <Badge tone="signal">busca "{s.query}"</Badge>}
           <span className="shrink-0 text-[11px] text-muted tnum">
             limite {s.limit} · {s.sort === "oldest" ? "mais antigos" : "recentes"} · último sync{" "}
             {s.lastSyncAt
@@ -516,7 +612,7 @@ export function SourceBlock({
 // ---------- barra de adicionar fonte (em cima) ----------
 export function AddSourceBar({ genreId }: { genreId: string }) {
   const qc = useQueryClient();
-  const [kind, setKind] = useState<"channel" | "search" | "channelSearch" | "video">("channel");
+  const [kind, setKind] = useState<"channel" | "search" | "video">("channel");
   const [url, setUrl] = useState("");
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(12);
@@ -538,7 +634,6 @@ export function AddSourceBar({ genreId }: { genreId: string }) {
           [
             ["channel", "Canal", MonitorPlay],
             ["search", "Busca", Search],
-            ["channelSearch", "Busca no canal", Search],
             ["video", "Vídeo (manual)", MonitorPlay],
           ] as const
         ).map(([k, label, I]) => (
@@ -555,8 +650,8 @@ export function AddSourceBar({ genreId }: { genreId: string }) {
         ))}
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        {(kind === "channel" || kind === "channelSearch" || kind === "video") && (
-          <Field label={kind === "video" ? "URL do vídeo" : "URL do canal"}>
+        {kind === "channel" && (
+          <Field label="URL do canal">
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
@@ -565,13 +660,15 @@ export function AddSourceBar({ genreId }: { genreId: string }) {
             />
           </Field>
         )}
-        {(kind === "search" || kind === "channelSearch") && (
-          <Field label="Termo de busca">
+        {(kind === "search" || kind === "video") && (
+          <Field label={kind === "video" ? "URL do vídeo" : "Termo de busca"}>
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Rocket League"
-              className="w-60"
+              value={kind === "video" ? url : query}
+              onChange={(e) =>
+                kind === "video" ? setUrl(e.target.value) : setQuery(e.target.value)
+              }
+              placeholder={kind === "video" ? "https://www.youtube.com/watch?v=…" : "Rocket League"}
+              className="w-80"
             />
           </Field>
         )}
@@ -597,8 +694,8 @@ export function AddSourceBar({ genreId }: { genreId: string }) {
         </Button>
       </div>
       <p className="mt-2 text-[11px] text-muted">
-        Depois de adicionar, use ↻ na fonte para sincronizar — os vídeos aparecem no bloco dela, com
-        thumbnails, para você conferir e remover o que não quiser.
+        Depois de adicionar, use ↻ na fonte para sincronizar. Para restringir o que entra de um
+        canal — incluindo busca dentro dele — use os filtros (⚙/≡) na linha da fonte.
       </p>
     </Card>
   );
