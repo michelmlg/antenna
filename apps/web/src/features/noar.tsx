@@ -468,6 +468,7 @@ export default function NoAr() {
             src={hlsUrl}
             live={running}
             mediaKey={cur?.mediaId}
+            fill
             offlineAction={
               running || start.isPending
                 ? undefined
