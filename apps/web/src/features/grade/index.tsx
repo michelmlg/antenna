@@ -490,13 +490,10 @@ export default function Grade() {
   return (
     <div className="flex flex-col">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Grade de Programação</h1>
-          <p className="text-xs text-muted">
-            arraste da biblioteca · corpo = mover · bordas = redimensionar · clique = selecionar ·
-            fora dos blocos: seleção automática
-          </p>
-        </div>
+        <p className="max-w-xl text-xs text-muted">
+          arraste da biblioteca · corpo = mover · bordas = redimensionar · clique = selecionar ·
+          fora dos blocos: seleção automática
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           {toast && <StatusPill tone="green" text={toast} />}
           {pill}

@@ -98,11 +98,7 @@ export function LibraryPanel({ open, onToggle, onNewBlock }: Props) {
         />
       )}
       <div className="flex items-center justify-between p-1.5">
-        {open && (
-          <span className="px-1 text-[11px] font-bold uppercase tracking-wide text-muted">
-            Biblioteca
-          </span>
-        )}
+        {open && <span className="px-1 text-[11px] font-semibold text-muted">Biblioteca</span>}
         <Button
           size="sm"
           variant="ghost"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Clapperboard, RadioTower, Settings, Tv } from "lucide-react";
 import { api, type PlayoutState } from "./lib/api";
@@ -24,11 +24,21 @@ function Clock() {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
-  return <span className="font-mono text-sm text-muted">{now.toLocaleTimeString("pt-BR")}</span>;
+  return <span className="text-sm text-muted tnum">{now.toLocaleTimeString("pt-BR")}</span>;
+}
+
+/** o header carrega o título da área; detalhes têm título próprio (ex.: gênero). */
+function pageTitle(pathname: string): string | null {
+  if (pathname.startsWith("/grade")) return "Grade de Programação";
+  if (/^\/generos\/.+/.test(pathname)) return null;
+  if (pathname.startsWith("/generos")) return "Gêneros de conteúdo";
+  if (pathname.startsWith("/operacao")) return "Operação do canal";
+  return "No Ar";
 }
 
 export default function App() {
   useAntennaEvents();
+  const { pathname } = useLocation();
   const { data: state } = useQuery({
     queryKey: ["playout-state"],
     queryFn: () => api.get<PlayoutState>("/playout/state"),
@@ -59,7 +69,9 @@ export default function App() {
               end={to === "/"}
               className={({ isActive }) =>
                 `flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${
-                  isActive ? "bg-signal/15 text-signal font-medium" : "text-muted hover:bg-muted/10 hover:text-foreground"
+                  isActive
+                    ? "bg-signal/15 text-signal font-medium"
+                    : "text-muted hover:bg-muted/10 hover:text-foreground"
                 }`
               }
             >
@@ -83,7 +95,7 @@ export default function App() {
       {/* ---------- workspace ---------- */}
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-muted/10 px-6 py-3">
-          <div className="text-sm font-semibold">Painel de programação</div>
+          <div className="text-sm font-semibold">{pageTitle(pathname)}</div>
           <Clock />
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto p-6">

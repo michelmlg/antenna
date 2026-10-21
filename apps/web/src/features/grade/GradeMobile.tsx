@@ -62,10 +62,7 @@ export default function GradeMobile() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">Grade</h1>
-        {pill}
-      </div>
+      <div className="flex items-center justify-end">{pill}</div>
 
       <div className="flex gap-1 overflow-x-auto pb-1">
         {DOWS.map(([label], i) => (
