@@ -448,7 +448,7 @@ export default function NoAr() {
     <div className="flex min-h-0 flex-col gap-4">
       <div className="flex min-h-0 flex-col gap-4 xl:flex-row">
         {/* ---------- console: player + lower-third + transmissão ---------- */}
-        <Card flush className="min-w-0 flex-1">
+        <Card flush className="flex min-w-0 flex-1 flex-col">
           <LivePlayer
             src={hlsUrl}
             live={running}
