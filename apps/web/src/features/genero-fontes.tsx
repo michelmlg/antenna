@@ -43,8 +43,9 @@ function MediaCard({ m, onDelete }: { m: MediaLite & { status: string }; onDelet
     <div
       className={`group relative overflow-hidden rounded border border-muted/10 bg-background/40 ${m.status === "inativo" ? "opacity-45" : ""}`}
     >
-      <img src={thumb ?? ""} alt="" loading="lazy" className="aspect-video w-full object-cover" />
-      {!thumb && (
+      {thumb ? (
+        <img src={thumb} alt="" loading="lazy" className="aspect-video w-full object-cover" />
+      ) : (
         <div className="flex aspect-video items-center justify-center bg-muted/10 text-[10px] text-muted">
           {m.source}
         </div>

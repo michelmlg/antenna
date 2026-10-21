@@ -18,6 +18,13 @@ const NAV = [
   { to: "/operacao", label: "Operação", icon: Settings },
 ];
 
+const navLinkClass = (isActive: boolean) =>
+  `flex items-center gap-2.5 whitespace-nowrap rounded-md px-3 py-2 text-sm transition-colors ${
+    isActive
+      ? "bg-signal/15 font-medium text-signal"
+      : "text-muted hover:bg-muted/10 hover:text-foreground"
+  }`;
+
 function Clock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -50,7 +57,7 @@ export default function App() {
   return (
     <div className="flex h-full">
       {/* ---------- sidebar ---------- */}
-      <aside className="flex w-56 shrink-0 flex-col border-r border-muted/10 bg-surface">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-muted/10 bg-surface lg:flex">
         <div className="flex items-center gap-2.5 px-4 py-5">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-signal text-background">
             <RadioTower size={20} />
@@ -98,6 +105,21 @@ export default function App() {
           <div className="text-sm font-semibold">{pageTitle(pathname)}</div>
           <Clock />
         </header>
+
+        {/* nav em chips em telas estreitas — a sidebar fica só no desktop */}
+        <nav className="flex gap-1 overflow-x-auto border-b border-muted/10 px-3 py-2 lg:hidden">
+          {NAV.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === "/"}
+              className={({ isActive }) => navLinkClass(isActive)}
+            >
+              <Icon size={16} />
+              {label}
+            </NavLink>
+          ))}
+        </nav>
         <main className="min-h-0 flex-1 overflow-y-auto p-6">
           <Routes>
             <Route path="/" element={<NoAr />} />
