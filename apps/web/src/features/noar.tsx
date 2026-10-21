@@ -28,7 +28,7 @@ import {
   type ScheduleRow,
   type StreamInfo,
 } from "../lib/api";
-import { Badge, Button, Card, Empty, ErrorMsg, Spinner, fmtDur } from "../components/ui";
+import { Badge, Button, Card, Empty, ErrorMsg, Spinner, Tabs, fmtDur } from "../components/ui";
 import { LivePlayer } from "../components/LivePlayer";
 import { GenreIcon } from "../lib/icons";
 
@@ -468,7 +468,6 @@ export default function NoAr() {
             src={hlsUrl}
             live={running}
             mediaKey={cur?.mediaId}
-            fill
             offlineAction={
               running || start.isPending
                 ? undefined
@@ -566,7 +565,7 @@ export default function NoAr() {
                 <span className="text-[11px] text-muted tnum">{queue.length} na fila</span>
               )}
             </div>
-            <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-0.5">
+            <div className="mt-2 min-h-0 max-h-[220px] flex-1 overflow-y-auto pr-0.5 xl:max-h-none">
               <Rundown items={queue} onPlay={(id) => play.mutate(id)} />
             </div>
             <div className="mt-3 shrink-0 space-y-0.5 border-t border-muted/10 pt-2 text-[11px] text-muted">
@@ -589,32 +588,22 @@ export default function NoAr() {
   );
 }
 
-/** Tabs à direita: Últimos exibidos (inicial) e Saúde — preenche a altura do player. */
+/** Tabs à direita: Últimos exibidos (inicial) e Saúde — card de altura constante. */
 function DetailTabs({ state, pid }: { state: PlayoutState | undefined; pid: number | null }) {
   const [tab, setTab] = useState<"exibidos" | "saude">("exibidos");
   const issues = state?.workerOnline === false || !!state?.lastError;
-  const tabBtn = (id: "exibidos" | "saude", label: string, dot?: boolean) => (
-    <button
-      type="button"
-      aria-pressed={tab === id}
-      onClick={() => setTab(id)}
-      className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/50 ${
-        tab === id
-          ? "bg-signal/15 text-signal"
-          : "text-muted hover:bg-muted/10 hover:text-foreground"
-      }`}
-    >
-      {dot && <i className="h-1.5 w-1.5 shrink-0 rounded-full bg-danger" />}
-      {label}
-    </button>
-  );
   return (
     <Card className="flex min-h-0 flex-[3] flex-col">
-      <div className="flex items-center gap-1 border-b border-muted/10 pb-2.5">
-        {tabBtn("exibidos", "Últimos exibidos")}
-        {tabBtn("saude", "Saúde", issues)}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto pt-2">
+      <Tabs
+        tabs={[
+          { id: "exibidos", label: "Últimos exibidos" },
+          { id: "saude", label: "Saúde", dot: issues },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+      {/* altura fixa: o painel é o mesmo nas duas tabs e rola quando não cabe */}
+      <div className="min-h-0 max-h-[280px] flex-1 overflow-y-auto pt-2.5 xl:max-h-none">
         {tab === "exibidos" ? <RecentHistory /> : <Health state={state} pid={pid} />}
       </div>
     </Card>

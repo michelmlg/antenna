@@ -17,7 +17,6 @@ export function LivePlayer({
   mediaKey,
   offlineLabel = "canal parado — inicie o playout",
   offlineAction,
-  fill = false,
 }: {
   src: string | null;
   /** muda quando a mídia no ar troca → recarrega a fonte sozinho */
@@ -26,8 +25,6 @@ export function LivePlayer({
   offlineLabel?: string;
   /** ação opcional no estado offline (ex.: iniciar o playout direto daqui) */
   offlineAction?: { label: string; onClick: () => void };
-  /** estica o quadro até o container (flex) em vez de 16:9 fixo — leve crop */
-  fill?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -134,11 +131,7 @@ export function LivePlayer({
   return (
     <div
       ref={frameRef}
-      className={
-        fill
-          ? "relative min-h-[200px] w-full flex-1 overflow-hidden rounded-lg bg-black"
-          : "relative aspect-video w-full overflow-hidden rounded-lg bg-black"
-      }
+      className="relative aspect-video w-full overflow-hidden rounded-lg bg-black"
       onMouseMove={() => {
         setShowCtrl(true);
         clearTimeout((frameRef.current as HTMLElement & { __t?: number }).__t);
@@ -148,13 +141,7 @@ export function LivePlayer({
         );
       }}
     >
-      <video
-        ref={videoRef}
-        playsInline
-        muted={muted}
-        autoPlay
-        className={fill ? "h-full w-full object-cover" : "h-full w-full"}
-      />
+      <video ref={videoRef} playsInline muted={muted} autoPlay className="h-full w-full" />
 
       {/* banner + controles */}
       <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">{banner}</div>

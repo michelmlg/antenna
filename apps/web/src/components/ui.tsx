@@ -1,6 +1,67 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Loader2, X } from "lucide-react";
 
+/**
+ * Tabs — padrão fino do sistema: labels de texto (hover discreto), ativo em
+ * signal e underline que DESLIZA até a tab selecionada (transição de posição).
+ */
+export function Tabs<T extends string>({
+  tabs,
+  active,
+  onChange,
+  className = "",
+}: {
+  tabs: { id: T; label: string; dot?: boolean }[];
+  active: T;
+  onChange: (id: T) => void;
+  className?: string;
+}) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [bar, setBar] = useState<{ left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    const place = () => {
+      const el = refs.current[tabs.findIndex((t) => t.id === active)];
+      if (el) setBar({ left: el.offsetLeft, width: el.offsetWidth });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [active, tabs]);
+
+  return (
+    <div
+      role="tablist"
+      className={"relative flex items-center gap-5 border-b border-muted/10 " + className}
+    >
+      {tabs.map((t, i) => (
+        <button
+          key={t.id}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          type="button"
+          role="tab"
+          aria-selected={active === t.id}
+          onClick={() => onChange(t.id)}
+          className={`flex items-center gap-1.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/50 ${
+            active === t.id ? "font-medium text-signal" : "text-muted hover:text-foreground"
+          }`}
+        >
+          {t.dot && <i className="h-1.5 w-1.5 shrink-0 rounded-full bg-danger" />}
+          {t.label}
+        </button>
+      ))}
+      {bar && (
+        <i
+          className="absolute -bottom-px h-0.5 bg-signal transition-all duration-200 ease-out motion-reduce:transition-none"
+          style={{ left: bar.left, width: bar.width }}
+        />
+      )}
+    </div>
+  );
+}
+
 export interface DropdownOption {
   value: string;
   label: string;
