@@ -76,6 +76,27 @@ export function ytTarget(opts: {
   return normalizeChannelUrl(opts.url);
 }
 
+/**
+ * Guarda para non-vídeo: a aba de busca do canal (e às vezes a página de
+ * resultados) devolve playlists, tabs e coleções como entry — id tipo "PL…"
+ * não é vídeo. Vídeo = id de 11 chars [A-Za-z0-9_-] (ou url com v=/shorts/…).
+ */
+export function videoOnlyEntries(raw: Record<string, unknown>[]): {
+  videos: Record<string, unknown>[];
+  skipped: number;
+} {
+  const isVideo = (e: Record<string, unknown>): boolean => {
+    const t = String(e._type ?? e.ie_key ?? "").toLowerCase();
+    if (t.includes("playlist") || t.includes("tab") || t === "channel") return false;
+    if (Array.isArray((e as { entries?: unknown }).entries)) return false;
+    const id = String(e.id ?? "");
+    if (id) return /^[A-Za-z0-9_-]{11}$/.test(id);
+    return !!extractYtId(String(e.url ?? ""));
+  };
+  const videos = raw.filter(isVideo);
+  return { videos, skipped: raw.length - videos.length };
+}
+
 /** Lista plana de vídeos (canal, busca global ou busca no canal) via yt-dlp. */
 export function ytList(opts: {
   type: string;
@@ -83,7 +104,7 @@ export function ytList(opts: {
   query: string;
   limit: number;
   sort: string;
-}): Promise<{ entries: Record<string, unknown>[]; walkTotal: number }> {
+}): Promise<{ entries: Record<string, unknown>[]; walkTotal: number; skipped: number }> {
   const n = Math.min(Math.max(Number(opts.limit) || 12, 1), 50);
   const oldest =
     opts.sort === "oldest" && opts.type === "channel" && !String(opts.query || "").trim();
@@ -110,7 +131,11 @@ export function ytList(opts: {
         }
         try {
           const data = JSON.parse(String(stdout));
-          let entries = ((data.entries || []) as Record<string, unknown>[]).filter(Boolean);
+          // playlists/tabs/coleções não são vídeos: filtra antes do corte de limite
+          const { videos, skipped } = videoOnlyEntries(
+            ((data.entries || []) as Record<string, unknown>[]).filter(Boolean),
+          );
+          let entries = videos;
           let walkTotal = 0;
           if (oldest) {
             walkTotal = entries.length;
@@ -118,7 +143,7 @@ export function ytList(opts: {
           } else {
             entries = entries.slice(0, n);
           }
-          resolve({ entries, walkTotal });
+          resolve({ entries, walkTotal, skipped });
         } catch {
           reject(new Error("saída do yt-dlp ilegível"));
         }
@@ -165,7 +190,7 @@ export async function syncSource(source: {
       throw new Error("fonte sem url do canal ou termo");
 
     const filters = parseFilters(source.filters);
-    const { entries, walkTotal } = await ytList({
+    const { entries, walkTotal, skipped } = await ytList({
       type: source.type,
       url: source.url,
       query: source.query,
@@ -315,6 +340,7 @@ export async function syncSource(source: {
     const parts: string[] = walkTotal
       ? [`${entries.length} dos ${walkTotal} (mais antigos)`]
       : [`${entries.length} listados`];
+    if (skipped) parts.push(`${skipped} pulados (não vídeos)`);
     if (hasDateFilter(filters) && probed) parts.push(`${probed} com data buscada`);
     if (filtered) parts.push(`${filtered} fora do filtro`);
     parts.push(`${added} novos`);
