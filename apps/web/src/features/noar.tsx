@@ -318,7 +318,7 @@ function TodayRuler({ rows }: { rows: ScheduleRow[] }) {
       title="Abrir a grade"
       className="block w-full cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-signal/50"
     >
-      <div className="relative h-12 overflow-hidden rounded-lg bg-background/50 ring-1 ring-inset ring-muted/10">
+      <div className="relative h-14 overflow-hidden rounded-lg bg-background/50 ring-1 ring-inset ring-muted/10">
         {rows.map((r) => {
           const start = toMin(r.startTime);
           const end = toMin(r.endTime);
@@ -327,7 +327,7 @@ function TodayRuler({ rows }: { rows: ScheduleRow[] }) {
             <div
               key={r.id}
               title={`${r.startTime}–${r.endTime} · ${r.program.name}`}
-              className="absolute inset-y-0 flex items-center gap-1 overflow-hidden px-1.5 text-[10px] font-semibold text-background"
+              className="absolute inset-y-0 flex flex-col justify-center gap-0.5 overflow-hidden px-2"
               style={{
                 left: pct(start),
                 width: `${w * 100}%`,
@@ -336,8 +336,16 @@ function TodayRuler({ rows }: { rows: ScheduleRow[] }) {
             >
               {w >= 0.09 && (
                 <>
-                  <GenreIcon name={r.program.genre?.icon} size={10} className="shrink-0" />
-                  <span className="truncate">{r.program.name}</span>
+                  {/* horário + nome completo — encaixam na linha no bloco largo */}
+                  <div className="relative flex items-center gap-1 text-[10px] leading-none">
+                    <span className="shrink-0 tnum text-background/85">
+                      {r.startTime}–{r.endTime}
+                    </span>
+                  </div>
+                  <div className="flex min-w-0 items-center gap-1 text-[11px] font-semibold leading-tight text-background">
+                    <GenreIcon name={r.program.genre?.icon} size={11} className="shrink-0" />
+                    <span className="truncate">{r.program.name}</span>
+                  </div>
                 </>
               )}
             </div>
@@ -440,7 +448,7 @@ export default function NoAr() {
     <div className="flex min-h-0 flex-col gap-4">
       <div className="flex min-h-0 flex-col gap-4 xl:flex-row">
         {/* ---------- console: player + lower-third + transmissão ---------- */}
-        <Card flush className="min-w-0 flex-1 self-start">
+        <Card flush className="min-w-0 flex-1">
           <LivePlayer
             src={hlsUrl}
             live={running}
@@ -527,14 +535,14 @@ export default function NoAr() {
             </div>
           )}
 
-          <div className="border-t border-muted/10">
+          <div className="mt-auto border-t border-muted/10">
             <StreamUrls stream={stream} />
           </div>
         </Card>
 
-        {/* ---------- rail: estado + rundown + últimos ---------- */}
-        <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-[380px] xl:min-h-0 xl:overflow-y-auto">
-          <Card className="shrink-0">
+        {/* ---------- rail: fila comprimida + tabs (esticados na altura do player) ---------- */}
+        <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-[380px] xl:min-h-0">
+          <Card className="min-h-0 shrink-0">
             <div className="flex flex-wrap items-center gap-2">
               {cur ? (
                 <Badge tone="signal">● AO VIVO</Badge>
@@ -549,14 +557,15 @@ export default function NoAr() {
             </div>
           </Card>
 
-          <Card>
+          <Card className="min-h-0 shrink-0">
             <div className="flex items-baseline justify-between">
               <span className="text-[11px] font-semibold text-muted">A seguir</span>
               {queue.length > 0 && (
                 <span className="text-[11px] text-muted tnum">{queue.length} na fila</span>
               )}
             </div>
-            <div className="mt-2">
+            {/* fila sob demanda: é menor que o player, então scroll interno */}
+            <div className="mt-2 max-h-[220px] overflow-y-auto pr-0.5 xl:max-h-[320px]">
               <Rundown items={queue} onPlay={(id) => play.mutate(id)} />
             </div>
             <div className="mt-3 space-y-0.5 border-t border-muted/10 pt-2 text-[11px] text-muted">
@@ -566,26 +575,48 @@ export default function NoAr() {
             <ErrorMsg error={play.error} />
           </Card>
 
-          <Card>
-            <div className="mb-1 text-[11px] font-semibold text-muted">Últimos exibidos</div>
-            <RecentHistory />
-          </Card>
+          <DetailTabs state={state} pid={cur?.pid ?? null} />
         </aside>
       </div>
 
-      {/* ---------- faixa inferior ---------- */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <div className="mb-2.5 text-[11px] font-semibold text-muted">Programação de hoje</div>
-          <TodayRuler rows={today} />
-        </Card>
-
-        <Card>
-          <div className="mb-2.5 text-[11px] font-semibold text-muted">Saúde</div>
-          <Health state={state} pid={cur?.pid ?? null} />
-        </Card>
-      </div>
+      {/* ---------- faixa inferior: programação de hoje, full-width ---------- */}
+      <Card>
+        <div className="mb-2.5 text-[11px] font-semibold text-muted">Programação de hoje</div>
+        <TodayRuler rows={today} />
+      </Card>
     </div>
+  );
+}
+
+/** Tabs à direita: Últimos exibidos (inicial) e Saúde — preenche a altura do player. */
+function DetailTabs({ state, pid }: { state: PlayoutState | undefined; pid: number | null }) {
+  const [tab, setTab] = useState<"exibidos" | "saude">("exibidos");
+  const issues = state?.workerOnline === false || !!state?.lastError;
+  const tabBtn = (id: "exibidos" | "saude", label: string, dot?: boolean) => (
+    <button
+      type="button"
+      aria-pressed={tab === id}
+      onClick={() => setTab(id)}
+      className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal/50 ${
+        tab === id
+          ? "bg-signal/15 text-signal"
+          : "text-muted hover:bg-muted/10 hover:text-foreground"
+      }`}
+    >
+      {dot && <i className="h-1.5 w-1.5 shrink-0 rounded-full bg-danger" />}
+      {label}
+    </button>
+  );
+  return (
+    <Card className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-1 border-b border-muted/10 pb-2.5">
+        {tabBtn("exibidos", "Últimos exibidos")}
+        {tabBtn("saude", "Saúde", issues)}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto pt-2">
+        {tab === "exibidos" ? <RecentHistory /> : <Health state={state} pid={pid} />}
+      </div>
+    </Card>
   );
 }
 
