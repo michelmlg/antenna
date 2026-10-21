@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/core";
 import { useQuery } from "@tanstack/react-query";
 import { Maximize, Plus, Redo2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
-import { Button, Card, Spinner } from "../../components/ui";
+import { Button, Card, Spinner, StatusPill } from "../../components/ui";
 import { api, type GenreRow, type PlayoutState, type ScheduleRow } from "../../lib/api";
 import {
   hasOverlap,
@@ -77,32 +77,6 @@ const anchorOnCursor: Modifier = ({ draggingNodeRect, transform, activatorEvent 
     y: curY - (draggingNodeRect.top + draggingNodeRect.height / 2),
   };
 };
-
-/** pill da toolbar — mesma altura (h-8) de todos os controles da barra */
-function ToolbarPill({
-  tone,
-  text,
-  pulse,
-}: {
-  tone: "muted" | "signal" | "green" | "red";
-  text: string;
-  pulse?: boolean;
-}) {
-  const tones = {
-    muted: "border-muted/10 bg-surface text-muted",
-    signal: "border-signal/30 bg-signal/10 text-signal",
-    green: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-    red: "border-danger/30 bg-danger/10 text-danger",
-  };
-  return (
-    <div
-      className={`flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-[11px] font-medium ${tones[tone]}`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full bg-current ${pulse ? "animate-pulse" : ""}`} />
-      {text}
-    </div>
-  );
-}
 
 export default function Grade() {
   const sched = useGradeSchedule();
@@ -500,15 +474,15 @@ export default function Grade() {
   }, []);
 
   const pill = sched.saving ? (
-    <ToolbarPill tone="signal" pulse text="salvando…" />
+    <StatusPill tone="signal" pulse text="salvando…" />
   ) : sched.status.kind === "error" ? (
     <span title={sched.status.msg ?? "falha ao salvar"}>
-      <ToolbarPill tone="red" text="falhou (desfeito)" />
+      <StatusPill tone="red" text="falhou (desfeito)" />
     </span>
   ) : sched.status.kind === "ok" ? (
-    <ToolbarPill tone="green" text="salvo" />
+    <StatusPill tone="green" text="salvo" />
   ) : (
-    <ToolbarPill tone="muted" text="sem alterações" />
+    <StatusPill tone="muted" text="sem alterações" />
   );
 
   if (isMobile) return <GradeMobile />;
@@ -524,7 +498,7 @@ export default function Grade() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {toast && <ToolbarPill tone="green" text={toast} />}
+          {toast && <StatusPill tone="green" text={toast} />}
           {pill}
           <div
             className="flex h-8 items-center gap-0.5 rounded-lg border border-muted/10 bg-surface p-1 shadow-sm shadow-black/10"
