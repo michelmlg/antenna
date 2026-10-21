@@ -602,8 +602,8 @@ function DetailTabs({ state, pid }: { state: PlayoutState | undefined; pid: numb
         active={tab}
         onChange={setTab}
       />
-      {/* altura fixa: o painel é o mesmo nas duas tabs e rola quando não cabe */}
-      <div className="min-h-0 max-h-[280px] flex-1 overflow-y-auto pt-2.5 xl:max-h-none">
+      {/* altura fixa: painel capado — trocar de tab não muda a altura do card */}
+      <div className="min-h-0 max-h-[140px] flex-1 overflow-y-auto pt-2.5">
         {tab === "exibidos" ? <RecentHistory /> : <Health state={state} pid={pid} />}
       </div>
     </Card>
