@@ -23,13 +23,19 @@ export function normalizeChannelUrl(url: string): string {
 
 // base do canal (sem /videos, /search etc.) — usado p/ montar a aba de busca
 export function channelBaseUrl(url: string): string {
-  const u = String(url || "").trim().replace(/\/+$/, "");
+  const u = String(url || "")
+    .trim()
+    .replace(/\/+$/, "");
   if (!/youtube\.com\//i.test(u)) return u;
   return u.replace(/\/(videos|search|shorts|streams|featured|live)$/i, "");
 }
 
 // executa fn em paralelo limitado (sondas de data)
-async function mapLimit<T, R>(arr: T[], n: number, fn: (item: T, idx: number) => Promise<R>): Promise<R[]> {
+async function mapLimit<T, R>(
+  arr: T[],
+  n: number,
+  fn: (item: T, idx: number) => Promise<R>,
+): Promise<R[]> {
   const out = new Array<R>(arr.length);
   let i = 0;
   const workers = Array.from({ length: Math.min(n, arr.length) }, async () => {
@@ -48,15 +54,40 @@ function bestThumb(e: { thumbnail?: string; thumbnails?: { url: string }[] }): s
   return list.length ? list[list.length - 1].url : null;
 }
 
-/** Lista plana de vídeos (canal, busca global ou busca no canal) via yt-dlp. */
-export function ytList(opts: { type: string; url: string; query: string; limit: number; sort: string }): Promise<{ entries: Record<string, unknown>[]; walkTotal: number }> {
+/** Alvo do yt-dlp para a listagem da fonte:
+ *  - search            -> busca global
+ *  - channelSearch     -> legado: busca no canal
+ *  - channel + query   -> busca dentro do canal (o "busca no canal" virou filtro da fonte)
+ *  - channel sem query -> uploads do canal
+ * `oldest` só anda o canal inteiro em listagem de canal sem busca (a página de
+ * busca ignora ordenação; usamos os primeiros N como na busca global). */
+export function ytTarget(opts: {
+  type: string;
+  url: string;
+  query: string;
+  sort: string;
+  limit: number;
+}): string {
+  const q = String(opts.query || "").trim();
   const n = Math.min(Math.max(Number(opts.limit) || 12, 1), 50);
-  const oldest = opts.sort === "oldest" && opts.type === "channel";
-  let target: string;
-  if (opts.type === "search") target = `ytsearch${n}:${opts.query}`;
-  else if (opts.type === "channelSearch")
-    target = `${channelBaseUrl(opts.url)}/search?query=${encodeURIComponent(String(opts.query || "").trim())}`;
-  else target = normalizeChannelUrl(opts.url);
+  if (opts.type === "search") return `ytsearch${n}:${q}`;
+  if ((opts.type === "channelSearch" || opts.type === "channel") && q)
+    return `${channelBaseUrl(opts.url)}/search?query=${encodeURIComponent(q)}`;
+  return normalizeChannelUrl(opts.url);
+}
+
+/** Lista plana de vídeos (canal, busca global ou busca no canal) via yt-dlp. */
+export function ytList(opts: {
+  type: string;
+  url: string;
+  query: string;
+  limit: number;
+  sort: string;
+}): Promise<{ entries: Record<string, unknown>[]; walkTotal: number }> {
+  const n = Math.min(Math.max(Number(opts.limit) || 12, 1), 50);
+  const oldest =
+    opts.sort === "oldest" && opts.type === "channel" && !String(opts.query || "").trim();
+  const target = ytTarget(opts);
 
   const args = ["--flat-playlist", "--dump-single-json"];
   if (!oldest) args.push("--playlist-end", String(n));
@@ -66,10 +97,15 @@ export function ytList(opts: { type: string; url: string; query: string; limit: 
     execFile(
       "yt-dlp",
       args,
-      { timeout: oldest ? 300000 : 120000, maxBuffer: oldest ? 64 * 1024 * 1024 : 16 * 1024 * 1024 },
+      {
+        timeout: oldest ? 300000 : 120000,
+        maxBuffer: oldest ? 64 * 1024 * 1024 : 16 * 1024 * 1024,
+      },
       (err, stdout) => {
         if (err && !stdout) {
-          const msg = String(err.message || err).split("\n")[0].slice(0, 200);
+          const msg = String(err.message || err)
+            .split("\n")[0]
+            .slice(0, 200);
           return reject(new Error(msg || "yt-dlp falhou"));
         }
         try {
@@ -86,7 +122,7 @@ export function ytList(opts: { type: string; url: string; query: string; limit: 
         } catch {
           reject(new Error("saída do yt-dlp ilegível"));
         }
-      }
+      },
     );
   });
 }
@@ -103,7 +139,13 @@ export async function syncSource(source: {
   filters: string | null;
 }) {
   if (runningSources.has(source.id))
-    return { sourceId: source.id, added: 0, errors: 0, message: "sync já em andamento", skipped: true };
+    return {
+      sourceId: source.id,
+      added: 0,
+      errors: 0,
+      message: "sync já em andamento",
+      skipped: true,
+    };
   runningSources.add(source.id);
 
   const run = await prisma.syncRun.create({ data: { sourceId: source.id, startedAt: new Date() } });
@@ -115,7 +157,8 @@ export async function syncSource(source: {
   let message = "";
 
   try {
-    if (source.type === "video") throw new Error("fonte tipo video não sincroniza (use link direto)");
+    if (source.type === "video")
+      throw new Error("fonte tipo video não sincroniza (use link direto)");
     if (source.type === "channel" && !source.url) throw new Error("fonte sem url");
     if (source.type === "search" && !source.query) throw new Error("fonte sem termo de busca");
     if (source.type === "channelSearch" && (!source.url || !source.query))
@@ -165,8 +208,10 @@ export async function syncSource(source: {
       const m = byVid.get(vid) || byUrl.get(ytUrl(vid));
       if (!m) continue;
       const patch: { uploadDate?: Date; views?: number } = {};
-      if (!m.uploadDate && typeof e.timestamp === "number") patch.uploadDate = new Date(e.timestamp * 1000);
-      if (m.views === null && Number.isFinite(Number(e.view_count))) patch.views = Number(e.view_count);
+      if (!m.uploadDate && typeof e.timestamp === "number")
+        patch.uploadDate = new Date(e.timestamp * 1000);
+      if (m.views === null && Number.isFinite(Number(e.view_count)))
+        patch.views = Number(e.view_count);
       if (Object.keys(patch).length) {
         try {
           await prisma.media.update({ where: { id: m.id }, data: patch });
@@ -206,7 +251,10 @@ export async function syncSource(source: {
         probed++;
         if (meta.uploadDate) {
           try {
-            await prisma.media.update({ where: { id: m.id }, data: { uploadDate: meta.uploadDate } });
+            await prisma.media.update({
+              where: { id: m.id },
+              data: { uploadDate: meta.uploadDate },
+            });
             healed++;
           } catch {
             /* best effort */
@@ -225,9 +273,10 @@ export async function syncSource(source: {
           view_count: e.view_count as number,
           timestamp: e.timestamp as number,
           live_status: e.live_status as string,
-          uploadDate: item.uploadDate ?? (e.timestamp ? new Date((e.timestamp as number) * 1000) : null),
+          uploadDate:
+            item.uploadDate ?? (e.timestamp ? new Date((e.timestamp as number) * 1000) : null),
         },
-        filters
+        filters,
       );
       if (!ok) filtered++;
       return ok;
@@ -247,7 +296,8 @@ export async function syncSource(source: {
             resolvedId: vid,
             channelTitle: String(e.channel || e.uploader || "").slice(0, 120),
             views: Number.isFinite(Number(e.view_count)) ? Number(e.view_count) : null,
-            uploadDate: item.uploadDate ?? (e.timestamp ? new Date((e.timestamp as number) * 1000) : null),
+            uploadDate:
+              item.uploadDate ?? (e.timestamp ? new Date((e.timestamp as number) * 1000) : null),
             thumbnailUrl: bestThumb(e as { thumbnail?: string; thumbnails?: { url: string }[] }),
             originSourceId: source.id,
           },
@@ -302,10 +352,23 @@ export async function syncSource(source: {
 
   await prisma.source.update({
     where: { id: source.id },
-    data: { lastSyncAt: new Date(), lastSyncCount: added, lastError: errors && !added ? message : "" },
+    data: {
+      lastSyncAt: new Date(),
+      lastSyncCount: added,
+      lastError: errors && !added ? message : "",
+    },
   });
   runningSources.delete(source.id);
-  return { sourceId: source.id, type: source.type, added, filtered, probed, archived, errors, message };
+  return {
+    sourceId: source.id,
+    type: source.type,
+    added,
+    filtered,
+    probed,
+    archived,
+    errors,
+    message,
+  };
 }
 
 /** Sincroniza todas as fontes ativas de um gênero (sequencial p/ não pesar). */
