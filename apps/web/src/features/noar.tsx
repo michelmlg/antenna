@@ -558,18 +558,18 @@ export default function NoAr() {
 
         {/* ---------- rail: fila comprimida + tabs, casando com o player ---------- */}
         <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-[380px] xl:min-h-0">
-          <Card className="min-h-0 shrink-0">
+          {/* fila é o card principal do rail (70/30) — rola internamente */}
+          <Card className="flex min-h-0 flex-[7] flex-col">
             <div className="flex items-baseline justify-between">
               <span className="text-[11px] font-semibold text-muted">A seguir</span>
               {queue.length > 0 && (
                 <span className="text-[11px] text-muted tnum">{queue.length} na fila</span>
               )}
             </div>
-            {/* fila sob demanda: é menor que o player, então scroll interno */}
-            <div className="mt-2 max-h-[190px] overflow-y-auto pr-0.5 xl:max-h-[240px]">
+            <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-0.5">
               <Rundown items={queue} onPlay={(id) => play.mutate(id)} />
             </div>
-            <div className="mt-3 space-y-0.5 border-t border-muted/10 pt-2 text-[11px] text-muted">
+            <div className="mt-3 shrink-0 space-y-0.5 border-t border-muted/10 pt-2 text-[11px] text-muted">
               {queueEta && <div className="tnum">fila vai até ~{queueEta}</div>}
               <div>a fila muda só com Pular ou troca de bloco</div>
             </div>
@@ -609,7 +609,7 @@ function DetailTabs({ state, pid }: { state: PlayoutState | undefined; pid: numb
     </button>
   );
   return (
-    <Card className="flex min-h-0 flex-1 flex-col">
+    <Card className="flex min-h-0 flex-[3] flex-col">
       <div className="flex items-center gap-1 border-b border-muted/10 pb-2.5">
         {tabBtn("exibidos", "Últimos exibidos")}
         {tabBtn("saude", "Saúde", issues)}
