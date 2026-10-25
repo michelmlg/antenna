@@ -162,3 +162,19 @@ export const playoutStatePayloadSchema = z.object({
   fallbackMediaId: z.string().nullable(),
 });
 export type PlayoutStatePayload = z.infer<typeof playoutStatePayloadSchema>;
+
+// ---------- personalização: logo sobre a transmissão ----------
+export const LOGO_CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"] as const;
+export const logoSettingsUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  corner: z.enum(LOGO_CORNERS).optional(),
+  scale: z.number().min(3).max(30).optional(),
+  margin: z.number().min(0).max(10).optional(),
+  opacity: z.number().min(10).max(100).optional(),
+});
+export type LogoSettingsUpdate = z.infer<typeof logoSettingsUpdateSchema>;
+
+/** Upload do logo: PNG/WebP em base64 (sem prefixo data:), até ~5 MB. */
+export const logoUploadSchema = z.object({
+  data: z.string().min(1).max(7_000_000),
+});

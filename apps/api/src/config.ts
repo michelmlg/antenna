@@ -16,4 +16,6 @@ export const config = {
   mtxApiUrl: (process.env.MTX_API_URL || "http://localhost:9997").replace(/\/+$/, ""),
   adminToken: process.env.ADMIN_TOKEN || "",
   logLevel: process.env.LOG_LEVEL || "info",
+  // logo da personalização (data/ é montado igual no api e no playout)
+  brandingDir: process.env.BRANDING_DIR || path.resolve(__dirname, "../../..", "data", "branding"),
 };

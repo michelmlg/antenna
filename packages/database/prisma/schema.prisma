@@ -211,3 +211,13 @@ model PlayoutState {
 
   @@map("playout_state")
 }
+
+// Linha única (id=1): personalização do canal. Cada seção é um JSON validado
+// pelo contrato (packages/shared) — hoje só "branding" (logo sobre o sinal).
+model ChannelSettings {
+  id        Int      @id @default(1)
+  branding  String   @default("{}")
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("channel_settings")
+}

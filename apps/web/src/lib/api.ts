@@ -199,3 +199,11 @@ export interface StreamInfo {
   rtspPath: string;
   viewers: number | null;
 }
+
+export interface BrandingPayload {
+  logo: import("@antenna/core/branding").LogoSettings;
+  /** URL da imagem atual (com ?v= para furar cache) */
+  logoUrl: string | null;
+  /** mutações: o worker já reaplicou no item atual (mesmo ponto do vídeo) */
+  applied?: boolean;
+}

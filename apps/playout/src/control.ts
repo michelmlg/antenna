@@ -53,6 +53,11 @@ app.post("/cmd/play-now", auth, wrap(async (req, res) => {
   res.json(playout.getState());
 }));
 
+// personalização mudou → reaplica no item atual, no mesmo ponto do vídeo
+app.post("/cmd/refresh-branding", auth, wrap(async (_req, res) => {
+  res.json(await playout.refreshCurrent());
+}));
+
 app.post("/cmd/next", auth, wrap(async (_req, res) => {
   await playout.skipNext();
   res.json(playout.getState());

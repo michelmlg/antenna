@@ -9,6 +9,7 @@ apps/web/dist/
 data/*.db
 data/*.db-wal
 data/*.db-shm
+data/branding/
 
 # ambiente
 .env

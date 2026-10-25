@@ -10,6 +10,7 @@ import { mediaRoutes } from "./modules/media.routes";
 import { playoutRoutes } from "./modules/playout.routes";
 import { scheduleProfileRoutes } from "./modules/schedule-profiles.routes";
 import { scheduleRoutes } from "./modules/scheduling.routes";
+import { settingsRoutes } from "./modules/settings.routes";
 import { streamRoutes } from "./modules/stream.routes";
 import { syncRoutes } from "./modules/sync.routes";
 import genresRouter from "./modules/genres.routes";
@@ -32,6 +33,7 @@ export function buildApp(): express.Express {
   app.use("/api/v1/playout", playoutRoutes);
   app.use("/api/v1/sync", syncRoutes);
   app.use("/api/v1/stream", streamRoutes);
+  app.use("/api/v1/settings", settingsRoutes);
   app.use("/api/v1", eventsRoutes);
   app.use("/api/v1", iptvRoutes);
 

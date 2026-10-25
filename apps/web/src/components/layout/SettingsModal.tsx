@@ -5,7 +5,15 @@
  */
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Info, RadioTower, Server, SlidersHorizontal, X, type LucideIcon } from "lucide-react";
+import {
+  Info,
+  Palette,
+  RadioTower,
+  Server,
+  SlidersHorizontal,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { version } from "../../../package.json";
 import { hhmm } from "../../lib/format";
 import { usePlayoutControls } from "../../lib/playout";
@@ -13,6 +21,7 @@ import { usePlayoutState, useStreamInfo } from "../../lib/queries";
 import { streamLinks } from "../../lib/stream";
 import { CopyField } from "../CopyField";
 import { Wordmark } from "../Logo";
+import { Personalizacao } from "./Personalizacao";
 import {
   Button,
   ErrorMsg,
@@ -29,6 +38,7 @@ import type { SettingsSection } from "./settings-context";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
   { id: "geral", label: "Geral", icon: SlidersHorizontal },
+  { id: "personalizacao", label: "Personalização", icon: Palette },
   { id: "transmissao", label: "Transmissão", icon: RadioTower },
   { id: "sistema", label: "Sistema", icon: Server },
   { id: "sobre", label: "Sobre", icon: Info },
@@ -45,9 +55,9 @@ export function SettingsModal({
   const current = SECTIONS.find((s) => s.id === section)!;
 
   return (
-    <Modal bare size="xl" onClose={onClose} className="sm:h-[620px]">
+    <Modal bare size="2xl" onClose={onClose} className="sm:h-[min(780px,88vh)]">
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-        <aside className="shrink-0 border-b border-line bg-base/40 p-3 md:w-56 md:border-b-0 md:border-r">
+        <aside className="shrink-0 border-b border-line bg-base/40 p-3 md:w-60 md:border-b-0 md:border-r">
           <div className="flex items-center justify-between px-3 pb-3 pt-2 md:pb-5">
             <h2 className="font-semibold">Configurações</h2>
             <IconButton icon={X} label="Fechar" onClick={onClose} className="-mr-2 md:hidden" />
@@ -84,6 +94,7 @@ export function SettingsModal({
             className="min-h-0 flex-1 animate-fade-in overflow-y-auto px-5 py-5 md:px-8"
           >
             {section === "geral" && <Geral />}
+            {section === "personalizacao" && <Personalizacao />}
             {section === "transmissao" && <Transmissao />}
             {section === "sistema" && <Sistema onClose={onClose} />}
             {section === "sobre" && <Sobre />}

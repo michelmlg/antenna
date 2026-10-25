@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./schedule": "./src/schedule.ts",
-    "./epg": "./src/epg.ts"
+    "./epg": "./src/epg.ts",
+    "./branding": "./src/branding.ts"
   },
   "dependencies": {
     "@antenna/database": "*",

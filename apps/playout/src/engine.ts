@@ -61,12 +61,35 @@ export function probeVideoCodec(url: string): Promise<string | null> {
   });
 }
 
-export function spawnFFmpeg(inputs: string[], videoCodec: string | null, onErrorLine: (line: string) => void): ChildProcess {
+/** Logo sobreposto: arquivo local + trecho de -filter_complex (packages/core/branding). */
+export interface LogoOverlay {
+  path: string;
+  /** monta o grafo dado o índice do input do logo */
+  filter: (logoInput: number) => string;
+}
+
+/** Argumentos do FFmpeg (puro — testável sem subir processo). */
+export function buildFfmpegArgs(
+  inputs: string[],
+  videoCodec: string | null,
+  logo?: LogoOverlay | null,
+  /** retomar do segundo N (reaplicar personalização sem voltar ao início) */
+  seekSec = 0
+): string[] {
   const target = `${config.mediaMtxUrl}/${config.channel}`;
   const args = ["-hide_banner", "-loglevel", "warning", "-re"];
-  for (const u of inputs) args.push("-stream_loop", "-1", "-i", u);
-  if (inputs.length > 1) args.push("-map", "0:v:0", "-map", "1:a:0");
-  if (videoCodec === "h264") {
+  const seek = seekSec > 0 ? ["-ss", String(Math.floor(seekSec))] : [];
+  // -ss antes de cada -i: busca no próprio input (vídeo e áudio no mesmo ponto)
+  for (const u of inputs) args.push(...seek, "-stream_loop", "-1", "-i", u);
+  const audio = inputs.length > 1 ? "1:a:0" : "0:a?";
+  if (logo) {
+    // imagem parada em loop como input extra; overlay exige transcodificar
+    args.push("-loop", "1", "-i", logo.path);
+    args.push("-filter_complex", logo.filter(inputs.length), "-map", "[vout]", "-map", audio);
+  } else if (inputs.length > 1) {
+    args.push("-map", "0:v:0", "-map", "1:a:0");
+  }
+  if (videoCodec === "h264" && !logo) {
     args.push("-c:v", "copy");
   } else {
     args.push(
@@ -76,6 +99,17 @@ export function spawnFFmpeg(inputs: string[], videoCodec: string | null, onError
     );
   }
   args.push("-c:a", "aac", "-b:a", "128k", "-f", "rtsp", "-rtsp_transport", "tcp", target);
+  return args;
+}
+
+export function spawnFFmpeg(
+  inputs: string[],
+  videoCodec: string | null,
+  onErrorLine: (line: string) => void,
+  logo?: LogoOverlay | null,
+  seekSec = 0
+): ChildProcess {
+  const args = buildFfmpegArgs(inputs, videoCodec, logo, seekSec);
   const proc = spawn("ffmpeg", args, { stdio: ["ignore", "ignore", "pipe"] });
 
   proc.stderr.on("data", (d) => {

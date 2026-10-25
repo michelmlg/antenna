@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-export type SettingsSection = "geral" | "transmissao" | "sistema" | "sobre";
+export type SettingsSection = "geral" | "personalizacao" | "transmissao" | "sistema" | "sobre";
 
 export const SettingsContext = createContext<(section?: SettingsSection) => void>(() => {});
 

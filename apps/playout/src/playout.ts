@@ -10,6 +10,7 @@ import { currentBlock } from "@antenna/core";
 import { config } from "./config";
 import { isFfmpegError, isYoutube, isInputDeath, killProc, probeVideoCodec, resolveInput, spawnFFmpeg } from "./engine";
 import { writeState } from "./state";
+import { loadLogoOverlay } from "./branding";
 
 type Picked = {
   media: { id: string; title: string; url: string; source: string; duration: number };
@@ -166,17 +167,25 @@ async function finishCurrent(result: string): Promise<void> {
   }
 }
 
-async function startItem(picked: Picked, opts: { isFallbackRetry?: boolean } = {}): Promise<void> {
-  if (state.starting) return; // serializa: impede dois FFmpeg juntos
+async function startItem(picked: Picked, opts: StartOpts = {}): Promise<boolean> {
+  if (state.starting) return false; // serializa: impede dois FFmpeg juntos
   state.starting = true;
   try {
-    await doStartItem(picked, opts);
+    return await doStartItem(picked, opts);
   } finally {
     state.starting = false;
   }
 }
 
-async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } = {}): Promise<void> {
+type StartOpts = {
+  isFallbackRetry?: boolean;
+  /** retomar o item ATUAL do segundo N (troca de logo) — mantém início/histórico */
+  resumeAt?: number;
+};
+
+/** true = FFmpeg novo no ar. */
+async function doStartItem(picked: Picked, opts: StartOpts = {}): Promise<boolean> {
+    const resuming = opts.resumeAt != null;
     const old = state.proc; // handover: o novo assume o path ANTES de o velho morrer
     let inputs: string[];
     try {
@@ -184,21 +193,22 @@ async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } =
     } catch (err) {
       state.lastError = err instanceof Error ? err.message : String(err);
       console.error("[playout]", state.lastError);
+      if (resuming) return false; // retomada falhou: o FFmpeg antigo segue no ar
       if (!opts.isFallbackRetry) {
         const fb = await fallbackMedia(state.fallbackMediaId);
         if (fb && fb.id !== picked.media.id) {
-          await doStartItem({ media: fb, program: null, isFallback: true }, { isFallbackRetry: true });
-          return;
+          return doStartItem({ media: fb, program: null, isFallback: true }, { isFallbackRetry: true });
         }
       }
       state.cooldownUntil = Date.now() + 5000;
-      return;
+      return false;
     }
 
     state.inputDead = false; // sinal do proc anterior não contamina o novo
     // YouTube: SEMPRE transcodifica; local: copy se h264
     const fromYT = isYoutube(picked.media.url, picked.media.source);
-    const videoCodec = fromYT ? null : await probeVideoCodec(inputs[0]);
+    const logo = await loadLogoOverlay(); // com logo, sempre transcodifica (sem sonda)
+    const videoCodec = fromYT || logo ? null : await probeVideoCodec(inputs[0]);
     const proc = spawnFFmpeg(inputs, videoCodec, (line) => {
       onFfmpegLine(line);
       // morte terminal de input no proc ATUAL → o par vídeo/áudio quebrou;
@@ -207,7 +217,7 @@ async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } =
         state.inputDead = true;
         console.log("[playout] input morreu — corte no próximo tick");
       }
-    });
+    }, logo, opts.resumeAt ?? 0);
     state.proc = proc;
     // MediaMTX troca publicadores no mesmo path de forma atômica (o novo entra,
     // o antigo é chutado) — dá um tempo pro handshake do novo e só então mata
@@ -225,6 +235,12 @@ async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } =
       }
     });
 
+    if (resuming && state.current) {
+      // mesmo item, mesmo relógio: o fim continua calculado pelo startedAt original
+      state.current.pid = proc.pid ?? null;
+      console.log(`[playout] >>> retomado em ${Math.floor(opts.resumeAt ?? 0)}s (personalização) pid=${proc.pid}`);
+      return true;
+    }
     const startedAt = new Date();
     const history = await prisma.playbackHistory.create({
       data: {
@@ -240,6 +256,7 @@ async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } =
     console.log(
       `[playout] >>> ${picked.media.title}${picked.program ? " (" + picked.program.name + ")" : ""} pid=${proc.pid}`
     );
+    return true;
 }
 
 // ---- tick ----
@@ -410,4 +427,24 @@ function restoreQueue(items: QueueItem[], program: { id: string; name: string } 
   }
 }
 
-export const playout = { start, stop, playNow, skipNext, setFallback, getState, planQueue, restoreQueue };
+/**
+ * Reaplica a personalização (logo) no item que está no ar: sobe um FFmpeg novo
+ * do MESMO vídeo no ponto atual e faz o handover sem vão. Perto do fim, deixa
+ * para o próximo item.
+ */
+async function refreshCurrent(): Promise<{ refreshed: boolean; at?: number }> {
+  const cur = state.current;
+  if (!state.running || !cur || state.starting) return { refreshed: false };
+  const at = (Date.now() - cur.startedAt.getTime()) / 1000;
+  if (cur.media.duration > 0 && at > cur.media.duration - 10) return { refreshed: false };
+  // YouTube às vezes recusa uma URL nova (bot-check transitório): 2ª tentativa
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (state.current !== cur) return { refreshed: false }; // item mudou no meio
+    const now = (Date.now() - cur.startedAt.getTime()) / 1000;
+    if (await startItem(cur, { resumeAt: now })) return { refreshed: true, at: Math.floor(now) };
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  return { refreshed: false };
+}
+
+export const playout = { refreshCurrent, start, stop, playNow, skipNext, setFallback, getState, planQueue, restoreQueue };

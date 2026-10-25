@@ -9,7 +9,7 @@ import { X } from "lucide-react";
 import { IconButton } from "./button";
 import { cn } from "./cn";
 
-const widths = { sm: "max-w-md", md: "max-w-xl", lg: "max-w-2xl", xl: "max-w-4xl" };
+const widths = { sm: "max-w-md", md: "max-w-xl", lg: "max-w-2xl", xl: "max-w-4xl", "2xl": "max-w-6xl" };
 
 export function Modal({
   title,
