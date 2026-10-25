@@ -70,7 +70,7 @@ nginx :3000 = front door (SPA, /api, /hls, /epg via API)
 - **Lógica de domínio** (seleção, filtros, grade, EPG, parsing) vai em `packages/core` como funções puras **com testes**. Apps só orquestram I/O.
 - **Contrato**: mudou a API → mude o schema Zod em `packages/shared` primeiro; a web consome os tipos inferidos.
 - **TypeScript strict**; sem `any`; erros da API padronizados `{ error, code }`; logs estruturados (pino).
-- **Frontend**: Tailwind puro com tokens definidos em `apps/web/tailwind.config.js` (`background`, `surface`, `signal`, `foreground`, `muted`) — nada de hex espalhado; ícones `lucide-react` (nunca emoji); componentes próprios em `components/ui.tsx`; TanStack Query + SSE (sem polling agressivo).
+- **Frontend**: Tailwind puro com tokens definidos em `apps/web/tailwind.config.js` (superfícies `base`/`panel`/`raised`/`line`/`element`, texto `fg`/`sub`/`dim`, `brand` âmbar, `live`/`danger`/`ok`) — nada de hex espalhado (cor de gênero é dado: derive tons com `lib/color.ts`); ícones `lucide-react` (nunca emoji; ícones de gênero = galeria fixa em `lib/icons.tsx`); kit próprio em `components/ui/` (importe de `components/ui`), com micro-interações padronizadas nos botões; toasts via `useToast`; TanStack Query + SSE (sem polling agressivo; queries compartilhadas em `lib/queries.ts`).
 - **Grade/EPG**: geometria derivada de **minutos** (`dayOfWeek*1440 + start`); px só no render. Blocos não cruzam meia-noite; mínimo de 5 min; sobreposição é rejeitada (409 no PATCH/POST).
 - **Commits**: convencionais em PT-BR com escopo — `feat(playout):`, `fix(iptv):`, `docs:` (veja `git log`).
 

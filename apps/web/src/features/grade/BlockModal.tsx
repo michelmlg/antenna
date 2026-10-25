@@ -1,11 +1,10 @@
-/** Modal de criação de bloco ("+ Programar" / "Novo bloco"). Edição é na grade (drag/alças). */
+/** Modal de criação de bloco ("Programar" / tecla N). Edição é na grade (drag/alças). */
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api, type GenreRow, type ScheduleRow } from "../../lib/api";
-import { hasOverlap, toMin } from "./time";
-import { Button, ErrorMsg, Field, Modal } from "../../components/ui";
+import type { ScheduleRow } from "../../lib/api";
+import { useGenres } from "../../lib/queries";
+import { Button, ErrorMsg, Field, Modal, cn } from "../../components/ui";
 import type { MutationResult } from "./useScheduleMutations";
-import { DOWS } from "./time";
+import { DOWS, DISPLAY_ORDER, durLabel, hasOverlap, toMin } from "./time";
 
 export interface ModalState {
   dow?: number;
@@ -24,11 +23,7 @@ interface Props {
 }
 
 export function BlockModal({ state, rows, onClose, onCreate }: Props) {
-  const { data: genres } = useQuery({
-    queryKey: ["genres"],
-    queryFn: () => api.get<GenreRow[]>("/genres"),
-  });
-
+  const { data: genres } = useGenres();
   const [genreId, setGenreId] = useState("");
   const [dow, setDow] = useState(state.dow ?? new Date().getDay());
   const [start, setStart] = useState("20:00");
@@ -37,18 +32,15 @@ export function BlockModal({ state, rows, onClose, onCreate }: Props) {
   const [saving, setSaving] = useState(false);
 
   const dur = toMin(end) - toMin(start);
-  const overlap = hasOverlap(rows, dow, toMin(start), toMin(end));
   const invalid = !genreId
-    ? "escolha um gênero"
-    : dur < 5
-      ? "duração mínima de 5 min"
-      : dur <= 0
-        ? "fim antes do início"
-        : overlap
-          ? "sobreposição com outro bloco deste dia"
+    ? "Escolha um gênero."
+    : dur <= 0
+      ? "O fim precisa ser depois do início (blocos não cruzam a meia-noite)."
+      : dur < 5
+        ? "Duração mínima de 5 minutos."
+        : hasOverlap(rows, dow, toMin(start), toMin(end))
+          ? `Conflita com outro bloco de ${DOWS[dow][1].toLowerCase()}.`
           : null;
-
-  const canSave = !invalid && !saving;
 
   async function save() {
     if (invalid) return;
@@ -61,17 +53,27 @@ export function BlockModal({ state, rows, onClose, onCreate }: Props) {
   }
 
   return (
-    <Modal title="Programar bloco" onClose={onClose}>
-      <div className="space-y-3">
-        <Field label="Gênero (cria/reaproveita o auto-programa)">
-          <select
-            id="blk-genre"
-            name="blk-genre"
-            value={genreId}
-            onChange={(e) => setGenreId(e.target.value)}
-            className="w-full"
+    <Modal
+      title="Programar bloco"
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancelar</Button>
+          <Button
+            variant="primary"
+            onClick={() => void save()}
+            disabled={!!invalid}
+            loading={saving}
           >
-            <option value="">— selecione —</option>
+            Programar
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="Gênero" hint="Cria (ou reaproveita) o programa automático do gênero.">
+          <select value={genreId} onChange={(e) => setGenreId(e.target.value)} className="w-full">
+            <option value="">Selecione…</option>
             {(genres ?? []).map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
@@ -79,59 +81,55 @@ export function BlockModal({ state, rows, onClose, onCreate }: Props) {
             ))}
           </select>
         </Field>
-        <Field label="Dia da semana">
-          <div className="flex flex-wrap gap-1.5">
-            {DOWS.map(([label], i) => (
-              <Button
-                key={label}
-                size="sm"
-                variant={dow === i ? "signal" : "default"}
+        <div>
+          <span className="mb-1.5 block text-[13px] text-sub">Dia da semana</span>
+          <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Dia da semana">
+            {DISPLAY_ORDER.map((i) => (
+              <button
+                key={i}
+                type="button"
+                role="radio"
+                aria-checked={dow === i}
                 onClick={() => setDow(i)}
+                className={cn(
+                  "rounded-lg border px-3 py-1.5 text-[13px] transition-[background-color,border-color,color,transform] duration-150 active:scale-95",
+                  dow === i
+                    ? "border-brand bg-brand/10 text-brand"
+                    : "border-line text-sub hover:border-element hover:text-fg",
+                )}
               >
-                {label}
-              </Button>
+                {DOWS[i][0]}
+              </button>
             ))}
           </div>
-        </Field>
-        <div className="flex gap-3">
+        </div>
+        <div className="grid grid-cols-3 gap-3">
           <Field label="Início">
             <input
-              id="blk-new-start"
-              name="blk-new-start"
               type="time"
               step={300}
               value={start}
               onChange={(e) => setStart(e.target.value)}
+              className="tnum"
             />
           </Field>
           <Field label="Fim">
             <input
-              id="blk-new-end"
-              name="blk-new-end"
               type="time"
               step={300}
               value={end}
               onChange={(e) => setEnd(e.target.value)}
+              className="tnum"
             />
           </Field>
           <Field label="Duração">
-            <div className="px-1 py-1.5 text-sm text-muted">
-              {dur > 0
-                ? `${Math.floor(dur / 60)}h${dur % 60 ? `${dur % 60}m` : ""}`.replace("h0", "h ")
-                : "—"}
+            <div className="flex h-9 items-center text-sm text-sub tnum">
+              {dur > 0 ? durLabel(dur) : "—"}
             </div>
           </Field>
         </div>
-        {invalid && <div className="text-xs text-danger">⚠ {invalid}</div>}
+        {invalid && genreId && <p className="text-[13px] text-danger">{invalid}</p>}
         <ErrorMsg error={apiError} />
-        <div className="flex justify-end gap-2 pt-1">
-          <Button variant="ghost" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button variant="signal" onClick={save} disabled={!canSave}>
-            Programar
-          </Button>
-        </div>
       </div>
     </Modal>
   );

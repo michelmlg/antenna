@@ -1,9 +1,14 @@
-/** Bloco de programa na timeline — alças esq/dir (resize) + corpo (drag). */
+/**
+ * Bloco de programa na timeline — alças esq/dir (resize) + corpo (drag).
+ * Selecionado: "acende" na cor do gênero e ganha um mini-menu (duplicar/excluir).
+ */
 import type React from "react";
 import { Copy, Trash2 } from "lucide-react";
-import { minutesToHHMM, toMin } from "./time";
 import type { ScheduleRow } from "../../lib/api";
-import { durLabel } from "./time";
+import { alpha, readableOn } from "../../lib/color";
+import { GenreIcon } from "../../lib/icons";
+import { cn } from "../../components/ui";
+import { durLabel, minutesToHHMM, toMin } from "./time";
 
 export type ResizeMode = "move" | "left" | "right";
 
@@ -14,16 +19,14 @@ interface Props {
   pending: boolean;
   onAir: boolean;
   onPick(e: React.PointerEvent, row: ScheduleRow, mode: ResizeMode): void;
-  onOpen(row: ScheduleRow): void; // duplo-clique
   onPickUp(e: React.PointerEvent): void;
   onPickMove(e: React.PointerEvent): void;
   onDuplicate(row: ScheduleRow): void;
   onDelete(row: ScheduleRow): void;
 }
 
-const CANVAS = "#00000055";
-const ORPHAN_BG =
-  "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.12)), rgba(163,163,163,0.22)";
+const TOP = 5;
+const HEIGHT = 54;
 
 export function ScheduleBlock({
   row,
@@ -32,7 +35,6 @@ export function ScheduleBlock({
   pending,
   onAir,
   onPick,
-  onOpen,
   onPickUp,
   onPickMove,
   onDuplicate,
@@ -42,25 +44,21 @@ export function ScheduleBlock({
   const end = toMin(row.endTime);
   const width = Math.max(6, (end - start) * px - 2);
   const orphan = !row.program.genre; // gênero removido após apply de perfil
-  const color = row.program.genre?.color || "#3b82f6";
+  const color = row.program.genre?.color;
   const narrow = width < 86;
-  const tiny = width < 44;
+  const tiny = width < 40;
 
-  const bodyStyle: React.CSSProperties = {
-    position: "absolute",
-    left: start * px,
-    top: 5,
+  const style: React.CSSProperties = {
+    left: start * px + 1,
+    top: TOP,
     width,
-    height: 54,
-    background: orphan
-      ? ORPHAN_BG
-      : `linear-gradient(180deg, rgba(255,255,255,0.16), rgba(0,0,0,0.10)), ${color}`,
-    boxShadow: selected
-      ? "0 0 0 2.5px #ffffffdd, 0 4px 10px #0007"
-      : `0 0 0 1px ${CANVAS}, 0 2px 6px #0006`,
-    cursor: narrow ? "grab" : undefined,
-    ...(pending ? { outline: "2px dashed #ffffffcc", outlineOffset: 2 } : {}),
-  } as React.CSSProperties;
+    height: HEIGHT,
+    ...(orphan
+      ? {}
+      : selected
+        ? { background: color, color: readableOn(color) }
+        : { background: alpha(color, 0.17), boxShadow: `inset 3px 0 0 ${color}` }),
+  };
 
   const suffix = orphan
     ? " · gênero removido (cai na seleção automática)"
@@ -70,109 +68,139 @@ export function ScheduleBlock({
 
   return (
     <div
-      className={`group absolute z-[5] rounded-lg text-white select-none touch-none transition-shadow ${
-        orphan ? "border border-dashed border-danger/70" : ""
-      }`}
-      style={bodyStyle}
+      className={cn(
+        "group absolute touch-none select-none rounded-md transition-[box-shadow,filter,background-color] duration-150",
+        selected ? "z-[9] shadow-lg shadow-black/40" : "z-[5] hover:brightness-125",
+        orphan && "border border-dashed border-danger/70 bg-raised",
+        pending && "outline-dashed outline-2 outline-offset-2 outline-white/70",
+      )}
+      style={style}
       title={`${row.program.name} · ${row.startTime}–${row.endTime}${suffix}`}
       onPointerDown={(e) => onPick(e, row, "move")}
       onPointerUp={onPickUp}
       onPointerMove={onPickMove}
-      onDoubleClick={() => onOpen(row)}
     >
       {/* alças de redimensionamento */}
       <span
-        className="absolute inset-y-0 left-0 z-[6] w-1.5 cursor-ew-resize rounded-l-lg bg-white/0 transition-colors group-hover:bg-white/50"
+        className="absolute inset-y-0 left-0 z-[6] w-2 cursor-ew-resize rounded-l-md after:absolute after:inset-y-3 after:left-[3px] after:w-0.5 after:rounded-full after:bg-white/0 after:transition-colors group-hover:after:bg-white/50"
         onPointerDown={(e) => onPick(e, row, "left")}
       />
       <span
-        className="absolute inset-y-0 right-0 z-[6] w-1.5 cursor-ew-resize rounded-r-lg bg-white/0 transition-colors group-hover:bg-white/50"
+        className="absolute inset-y-0 right-0 z-[6] w-2 cursor-ew-resize rounded-r-md after:absolute after:inset-y-3 after:right-[3px] after:w-0.5 after:rounded-full after:bg-white/0 after:transition-colors group-hover:after:bg-white/50"
         onPointerDown={(e) => onPick(e, row, "right")}
       />
+
       {!tiny && (
         <div
-          className={
-            "flex h-full flex-col px-2 pt-1 overflow-hidden " + (narrow ? "justify-center" : "")
-          }
+          className={cn(
+            "flex h-full cursor-grab flex-col justify-center overflow-hidden px-2.5 active:cursor-grabbing",
+          )}
         >
-          <div className="flex items-center gap-1 text-[11px] font-semibold leading-tight truncate">
-            {row.program.name}
+          <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium leading-tight">
+            {!narrow && <GenreIcon name={row.program.genre?.icon} size={12} className="shrink-0" />}
+            <span className="truncate">{row.program.name}</span>
             {onAir && (
-              <span className="ml-0.5 flex shrink-0 items-center gap-0.5 rounded bg-white/25 px-1 text-[9px] font-bold uppercase">
-                <span className="h-1 w-1 animate-pulse rounded-full bg-white" /> no ar
+              <span
+                className={cn(
+                  "flex shrink-0 items-center gap-1 rounded px-1 text-[9px] font-bold uppercase",
+                  selected ? "bg-black/15" : "bg-live text-white",
+                )}
+              >
+                <span className="h-1 w-1 animate-blink rounded-full bg-current" /> no ar
               </span>
             )}
           </div>
           {!narrow && (
-            <div className="mt-0.5 font-mono text-[10px] opacity-85">
-              {row.startTime}–{row.endTime}
-            </div>
-          )}
-          {!narrow && (
-            <div className="text-[10px] opacity-75">
-              {durLabel(end - start)}
-              {suffix}
+            <div
+              className={cn(
+                "mt-0.5 truncate text-[10px] tnum",
+                selected ? "opacity-75" : "text-sub",
+              )}
+            >
+              {row.startTime}–{row.endTime} · {durLabel(end - start)}
             </div>
           )}
         </div>
       )}
-      {/* mini-ações contextuais — só no bloco selecionado (descobribilidade; edição é na grade) */}
+
+      {/* mini-menu contextual — só no bloco selecionado */}
       {selected && (
-        <div className="absolute -top-2.5 right-1 z-[9] flex gap-0.5">
-          <button
-            className="flex h-5 w-5 items-center justify-center rounded-full bg-surface text-muted shadow-md shadow-black/30 hover:bg-muted/30 hover:text-foreground"
-            title="Duplicar (D)"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDuplicate(row);
-            }}
-          >
-            <Copy size={10} />
-          </button>
-          <button
-            className="flex h-5 w-5 items-center justify-center rounded-full bg-surface text-muted shadow-md shadow-black/30 hover:bg-danger/20 hover:text-danger"
-            title="Excluir (Del)"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(row);
-            }}
-          >
-            <Trash2 size={10} />
-          </button>
+        <div
+          className="absolute -top-3 right-1 z-[10] flex animate-pop-in items-center gap-0.5 rounded-full border border-line bg-raised p-0.5 text-sub shadow-pop"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <MiniAction label="Duplicar (D)" onClick={() => onDuplicate(row)}>
+            <Copy className="h-3.5 w-3.5" aria-hidden />
+          </MiniAction>
+          <MiniAction label="Excluir (Del)" danger onClick={() => onDelete(row)}>
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+          </MiniAction>
         </div>
       )}
     </div>
   );
 }
 
+function MiniAction({
+  label,
+  danger,
+  onClick,
+  children,
+}: {
+  label: string;
+  danger?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={cn(
+        "flex h-6 w-6 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150 active:scale-90",
+        danger ? "hover:bg-danger/15 hover:text-danger" : "hover:bg-element hover:text-fg",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 /** Fantasma de preview durante arraste/resize/drop da biblioteca. */
 export function GhostBlock({
-  dow,
   start,
   end,
   valid,
   px,
 }: {
-  dow: number;
   start: number;
   end: number;
   valid: boolean;
   px: number;
 }) {
-  void dow;
   return (
     <div
-      className={`pointer-events-none absolute z-[8] rounded-lg border-2 ${
-        valid
-          ? "border-signal bg-signal/15 shadow-sm shadow-signal/10"
-          : "border-danger bg-danger/20"
-      }`}
-      style={{ left: start * px, top: 5, width: Math.max(6, (end - start) * px - 2), height: 54 }}
+      className={cn(
+        "pointer-events-none absolute z-[8] rounded-md border-2 border-dashed",
+        valid ? "border-brand bg-brand/15" : "border-danger bg-danger/15",
+      )}
+      style={{
+        left: start * px + 1,
+        top: TOP,
+        width: Math.max(6, (end - start) * px - 2),
+        height: HEIGHT,
+      }}
     >
       <div
-        className={`truncate px-2 pt-1 text-[11px] font-mono ${valid ? "text-signal" : "text-danger"}`}
+        className={cn(
+          "truncate px-2 pt-1 text-[11px] font-medium tnum",
+          valid ? "text-brand" : "text-danger",
+        )}
       >
         {valid ? `${minutesToHHMM(start)}–${minutesToHHMM(end)}` : "conflito"}
       </div>

@@ -1,135 +1,28 @@
-import { useEffect, useState } from "react";
-import { NavLink, Route, Routes, useLocation } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Clapperboard, RadioTower, Settings, Tv } from "lucide-react";
-import { api, type PlayoutState } from "./lib/api";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { useAntennaEvents } from "./lib/sse";
-import { Badge } from "./components/ui";
-import NoAr from "./features/noar";
-import Generos from "./features/generos";
-import GeneroDetalhe from "./features/genero-detalhe";
+import { AppShell } from "./components/layout/AppShell";
+import Inicio from "./features/inicio";
 import Grade from "./features/grade";
-import Operacao from "./features/operacao";
-
-const NAV = [
-  { to: "/", label: "No Ar", icon: Tv },
-  { to: "/grade", label: "Grade", icon: CalendarDays },
-  { to: "/generos", label: "Gêneros", icon: Clapperboard },
-  { to: "/operacao", label: "Operação", icon: Settings },
-];
-
-const navLinkClass = (isActive: boolean) =>
-  `flex items-center gap-2.5 whitespace-nowrap rounded-md px-3 py-2 text-sm transition-colors ${
-    isActive
-      ? "bg-signal/15 font-medium text-signal"
-      : "text-muted hover:bg-muted/10 hover:text-foreground"
-  }`;
-
-function Clock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return <span className="text-sm text-muted tnum">{now.toLocaleTimeString("pt-BR")}</span>;
-}
-
-/** o header carrega o título da área; detalhes têm título próprio (ex.: gênero). */
-function pageTitle(pathname: string): string | null {
-  if (pathname.startsWith("/grade")) return "Grade de Programação";
-  if (/^\/generos\/.+/.test(pathname)) return null;
-  if (pathname.startsWith("/generos")) return "Gêneros de conteúdo";
-  if (pathname.startsWith("/operacao")) return "Operação do canal";
-  return "No Ar";
-}
+import Generos from "./features/generos";
+import GeneroDetalhe from "./features/generos/detalhe";
+import Atividade from "./features/atividade";
+import Assistir from "./features/assistir";
 
 export default function App() {
   useAntennaEvents();
-  const { pathname } = useLocation();
-  const { data: state } = useQuery({
-    queryKey: ["playout-state"],
-    queryFn: () => api.get<PlayoutState>("/playout/state"),
-    refetchInterval: 5000,
-  });
-
-  const live = !!state?.running;
-
   return (
-    <div className="flex h-full">
-      {/* ---------- sidebar ---------- */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-muted/10 bg-surface lg:flex">
-        <div className="flex items-center gap-2.5 px-4 py-5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-signal text-background">
-            <RadioTower size={20} />
-          </span>
-          <div>
-            <div className="text-sm font-bold leading-tight">Antenna</div>
-            <div className="text-[11px] text-muted">canal linear · LAN</div>
-          </div>
-        </div>
-
-        <nav className="flex-1 space-y-0.5 px-2">
-          {NAV.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === "/"}
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${
-                  isActive
-                    ? "bg-signal/15 text-signal font-medium"
-                    : "text-muted hover:bg-muted/10 hover:text-foreground"
-                }`
-              }
-            >
-              <Icon size={17} />
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="space-y-2 border-t border-muted/10 px-4 py-4 text-[11px]">
-          <div className="flex items-center gap-2">
-            {live ? <Badge tone="signal">● AO VIVO</Badge> : <Badge>○ parado</Badge>}
-            {state?.workerOnline === false && <Badge tone="red">worker offline</Badge>}
-          </div>
-          <div className="text-muted">
-            canal <code className="text-foreground">{state?.channel || "—"}</code>
-          </div>
-        </div>
-      </aside>
-
-      {/* ---------- workspace ---------- */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-muted/10 px-6 py-3">
-          <div className="text-sm font-semibold">{pageTitle(pathname)}</div>
-          <Clock />
-        </header>
-
-        {/* nav em chips em telas estreitas — a sidebar fica só no desktop */}
-        <nav className="flex gap-1 overflow-x-auto border-b border-muted/10 px-3 py-2 lg:hidden">
-          {NAV.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === "/"}
-              className={({ isActive }) => navLinkClass(isActive)}
-            >
-              <Icon size={16} />
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-        <main className="min-h-0 flex-1 overflow-y-auto p-6">
-          <Routes>
-            <Route path="/" element={<NoAr />} />
-            <Route path="/grade" element={<Grade />} />
-            <Route path="/generos" element={<Generos />} />
-            <Route path="/generos/:id" element={<GeneroDetalhe />} />
-            <Route path="/operacao" element={<Operacao />} />
-          </Routes>
-        </main>
-      </div>
-    </div>
+    <AppShell>
+      <Routes>
+        <Route path="/" element={<Inicio />} />
+        <Route path="/grade" element={<Grade />} />
+        <Route path="/generos" element={<Generos />} />
+        <Route path="/generos/:id" element={<GeneroDetalhe />} />
+        <Route path="/atividade" element={<Atividade />} />
+        <Route path="/assistir" element={<Assistir />} />
+        {/* rota antiga (Operação) */}
+        <Route path="/operacao" element={<Navigate to="/atividade" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AppShell>
   );
 }
