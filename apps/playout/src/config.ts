@@ -1,4 +1,5 @@
 import path from "node:path";
+import { dataDir } from "@antenna/database";
 import dotenv from "dotenv";
 
 // .env da raiz do monorepo (apps/playout/src -> root = 3 níveis)
@@ -20,5 +21,5 @@ export const config = {
   prewarmMin: num("CONTENT_SYNC_PREWARM_MIN", 15),
   adminToken: process.env.ADMIN_TOKEN || "",
   // logo da personalização (data/ é montado igual no api e no playout)
-  brandingDir: process.env.BRANDING_DIR || path.resolve(__dirname, "../../..", "data", "branding"),
+  brandingDir: process.env.BRANDING_DIR || path.join(dataDir(), "branding"),
 };

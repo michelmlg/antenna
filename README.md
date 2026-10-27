@@ -244,17 +244,15 @@ O bloqueio do YouTube (bot-check) é transitório: o canal se recupera sozinho.
 com CPU razoável — vídeos do YouTube são **transcodificados** pelo FFmpeg.
 
 ```bash
-git clone <url-do-repositorio> antenna
+git clone https://github.com/michelmlg/antenna.git
 cd antenna
-cp .env.example .env        # ajuste se quiser (veja "Configuração")
-cd infra
+cp .env.example .env        # ajuste portas, fuso etc. (veja "Configuração")
 docker compose up -d --build
 ```
 
-> ⚠️ O `docker-compose.yml` fica em `infra/`; rode o `docker compose` **de dentro dessa
-> pasta**.
-
-Pronto. A primeira _build_ baixa FFmpeg e yt-dlp e leva alguns minutos.
+Pronto — funciona igual em Linux, Windows e macOS. A primeira _build_ baixa FFmpeg e
+yt-dlp e leva alguns minutos. O banco (`data/antenna.db`) é **criado automaticamente**
+no primeiro boot da API; atualizações de schema também são aplicadas no boot.
 
 | O quê | Endereço |
 | --- | --- |
@@ -264,7 +262,7 @@ Pronto. A primeira _build_ baixa FFmpeg e yt-dlp e leva alguns minutos.
 | Lista M3U (IPTV) | `http://<ip-do-servidor>:3000/api/v1/iptv/channels.m3u` |
 | Guia XMLTV (EPG) | `http://<ip-do-servidor>:3000/api/v1/epg/guide.xml` |
 
-Se mudar a variável `CHANNEL`, troque `antenna` nas URLs pelo novo nome.
+Se mudar `CHANNEL`, `WEB_PORT` ou `RTSP_PORT`, ajuste o nome/porta nas URLs.
 
 ### Primeiros passos
 
@@ -302,10 +300,15 @@ Se mudar a variável `CHANNEL`, troque `antenna` nas URLs pelo novo nome.
 
 ## Configuração
 
-Copie `.env.example` para `.env`. As principais variáveis:
+Tudo fica num único `.env` na raiz (copie de `.env.example`), lido pelo
+`docker compose` e pelo desenvolvimento local. As principais variáveis:
 
 | Variável | Padrão | Descrição |
 | --- | --- | --- |
+| `WEB_PORT` | `3000` | Porta do painel (nginx: painel + `/api` + `/hls`). |
+| `RTSP_PORT` / `RTMP_PORT` / `HLS_PORT` | `8554` / `1935` / `8080` | Portas publicadas do MediaMTX. |
+| `DATA_DIR` | `./data` | Pasta do banco e do logo (relativa à raiz ou absoluta). O `antenna.db` é criado nela. |
+| `MEDIA_DIR` | `./media` | Pasta dos arquivos locais (montada em `/media`). |
 | `CHANNEL` | `antenna` | Nome do canal (caminho no MediaMTX e nas URLs). |
 | `TZ` | `America/Sao_Paulo` | Fuso da grade de programação. **Importante:** a grade usa o horário local. |
 | `AUTOPLAY` | `true` | Inicia a exibição ao subir o worker. |
@@ -315,22 +318,23 @@ Copie `.env.example` para `.env`. As principais variáveis:
 | `ADMIN_TOKEN` | _(vazio)_ | Se definido, as rotas que alteram dados exigem `Authorization: Bearer <token>`. |
 | `LOG_LEVEL` | `info` | Nível dos logs (pino). |
 
-As demais (`DATABASE_URL`, `PLAYOUT_URL`, `MEDIA_MTX_URL`, `MTX_API_URL`, portas) já vêm
-corretas no `docker-compose.yml`; só mexa nelas no desenvolvimento local.
+Os endereços internos (`PLAYOUT_URL`, `MEDIA_MTX_URL`, `MTX_API_URL`, `API_PORT`,
+`PLAYOUT_PORT`) são fixos no `docker-compose.yml` e só valem no desenvolvimento local.
+`DATABASE_URL` não precisa ser definida: é derivada de `DATA_DIR` (se definida, vence).
 
 ### Portas
 
 | Porta | Serviço | Exposta? |
 | --- | --- | --- |
-| `3000` | nginx (painel + `/api` + `/hls`) | ✅ porta de entrada |
-| `8554` | RTSP (VLC) | ✅ |
-| `8080` | HLS direto do MediaMTX | ✅ (opcional) |
-| `1935` | RTMP | ✅ |
+| `3000` (`WEB_PORT`) | nginx (painel + `/api` + `/hls`) | ✅ porta de entrada |
+| `8554` (`RTSP_PORT`) | RTSP (VLC) | ✅ |
+| `8080` (`HLS_PORT`) | HLS direto do MediaMTX | ✅ (opcional) |
+| `1935` (`RTMP_PORT`) | RTMP | ✅ |
 | `3001` / `3100` / `9997` | API / controle do playout / API do MediaMTX | ❌ só na rede interna |
 
 ## Dados e backup
 
-Tudo que importa vive em duas pastas na raiz do projeto:
+Tudo que importa vive em duas pastas (`DATA_DIR` e `MEDIA_DIR`, por padrão na raiz):
 
 - `data/` — `antenna.db` (SQLite em WAL: gêneros, fontes, mídias, grade, histórico) e
   `data/branding/` (logo).
@@ -346,7 +350,6 @@ Tudo que importa vive em duas pastas na raiz do projeto:
 ## Operação e manutenção
 
 ```bash
-cd infra
 docker compose ps                    # estado dos containers
 docker compose logs -f playout       # logs do worker (ffmpeg, yt-dlp, falhas)
 docker compose restart playout       # reinicia só a exibição
@@ -356,7 +359,6 @@ docker compose up -d --build api     # aplica mudança de código na API (idem w
 - **Atualizar o yt-dlp** (quando o YouTube muda algo e os vídeos deixam de resolver):
 
   ```bash
-  cd infra
   docker compose build playout && docker compose up -d playout
   ```
 
@@ -374,10 +376,10 @@ Requisitos: **Node ≥ 20** e **npm 11**. O repositório é um monorepo com npm 
 
 ```bash
 npm install
-npm run db:push        # cria data/antenna.db
-npm run dev:playout    # worker de exibição  (porta 3100)
-npm run dev:api        # API Express         (porta 3001)
-npm run dev:web        # painel Vite         (porta 5173, proxy /api)
+cp .env.example .env   # o mesmo .env do Docker
+npm run dev:api        # API Express (API_PORT, 3001) — cria/atualiza o banco antes
+npm run dev:playout    # worker de exibição (PLAYOUT_PORT, 3100)
+npm run dev:web        # painel Vite (WEB_DEV_PORT, 5173, proxy /api)
 ```
 
 Para o playout local você precisa de **FFmpeg**, **yt-dlp** e um **MediaMTX** acessíveis
@@ -412,7 +414,7 @@ packages/
   core/       domínio puro e testado
   shared/     contrato Zod API ↔ Web
   database/   schema Prisma + client + migração
-infra/        docker-compose, Dockerfiles, nginx, mediamtx.yml
+infra/        Dockerfiles, nginx, mediamtx.yml (o docker-compose.yml fica na raiz)
 docs/         plano de arquitetura e decisões
 data/         banco SQLite e logo (criado em runtime)
 media/        arquivos locais de vídeo
@@ -456,7 +458,7 @@ ao [`yt-dlp`](https://github.com/yt-dlp/yt-dlp), ao FFmpeg, ao MediaMTX ou ao Je
 | Nenhum vídeo toca | Gênero sem mídias elegíveis: sincronize as fontes, revise os filtros e a janela anti-repetição, defina um fallback. |
 | Grade "não aplicou" | Vale no próximo tick (5 s); o vídeo atual não é cortado — só a fila é refeita quando o bloco muda. |
 | Jellyfin não abre o canal | Desligue **Auto-loop live streams** e confira se o M3U/XMLTV usam o IP e a porta `3000` corretos. |
-| `docker compose` diz "no configuration file provided" | Rode de dentro da pasta `infra/`. |
+| `docker compose` diz "no configuration file provided" | Rode na raiz do projeto (onde está o `docker-compose.yml`). |
 | Erro `IOERR_SHORT_READ` no SQLite | Houve escrita no banco pelo host com containers ativos; pare tudo e restaure um backup do `data/`. |
 
 ## Licença

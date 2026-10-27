@@ -21,4 +21,5 @@ RUN npx prisma generate --schema packages/database/prisma/schema.prisma
 
 ENV NODE_ENV=production
 EXPOSE 3001
-CMD ["npx", "tsx", "apps/api/src/index.ts"]
+# cria/atualiza o banco (DATA_DIR) antes de subir — banco novo = zero passos manuais
+CMD ["sh", "-c", "npx tsx packages/database/scripts/prisma.ts db push --skip-generate && exec npx tsx apps/api/src/index.ts"]

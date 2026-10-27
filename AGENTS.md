@@ -23,16 +23,15 @@ npm test                   # vitest — SÓ packages/core e apps/playout
 npm run typecheck          # tsc --noEmit (shared, database, core, api, playout — NÃO inclui web)
 npm run lint               # eslint (core, shared, api, playout)
 npm run build:web          # vite build (use para validar mudanças em apps/web)
-npm run db:push            # prisma db push (cria/atualiza data/antenna.db)
+npm run db:push            # prisma db push (cria/atualiza <DATA_DIR>/antenna.db; dev:api já roda)
 npm run migrate:v1         # migração one-shot do projeto antigo (não rode de novo)
 ```
 
 Docker (produção):
 
 ```bash
-cd infra && docker compose up -d --build   # o compose vive em infra/ — da raiz falha ("no configuration file provided")
-docker compose -f infra/docker-compose.yml build playout && \
-docker compose -f infra/docker-compose.yml up -d playout   # atualizar yt-dlp (YouTube mudou algo)
+docker compose up -d --build                # na raiz; portas/pastas vêm do .env central
+docker compose build playout && docker compose up -d playout   # atualizar yt-dlp (YouTube mudou algo)
 ```
 
 ## Mapa do monorepo
@@ -45,8 +44,8 @@ docker compose -f infra/docker-compose.yml up -d playout   # atualizar yt-dlp (Y
 | `packages/core`     | **domínio puro, testado**                        | `selection.ts` (composer/mistura/anti-repetição), `filters.ts`, `schedule.ts` (bloco atual), `epg.ts` (XMLTV)                         |
 | `packages/database` | schema Prisma + client + migração v1             | SQLite em WAL; `data/antenna.db`                                                                                                      |
 | `packages/shared`   | contrato Zod único API↔Web                       | todo input da API valida aqui; a web tipa daqui                                                                                       |
-| `infra/`            | docker-compose, Dockerfiles, nginx, mediamtx.yml | nginx :3000 é o front door (SPA + `/api` + `/hls`)                                                                                    |
-| `data/`             | `antenna.db` (SQLite WAL)                        | estado compartilhado API ↔ worker                                                                                                     |
+| `infra/`            | Dockerfiles, nginx, mediamtx.yml (compose na raiz) | nginx :3000 é o front door (SPA + `/api` + `/hls`)                                                                                    |
+| `data/`             | `antenna.db` (SQLite WAL)                        | estado compartilhado API ↔ worker; criado no boot da API (`DATA_DIR`) |
 | `media/`            | arquivos locais do playout                       | montado em `/media` no container                                                                                                      |
 
 ## Arquitetura em 30 segundos
@@ -80,7 +79,7 @@ nginx :3000 = front door (SPA, /api, /hls, /epg via API)
    escrevendo simultâneo (bind mount Windows) já clobberou frames do WAL
    (`IOERR_SHORT_READ`). Jobs de dados: `docker exec` no container + PrismaClient,
    com critérios de match por `id` (nunca por título com acento).
-2. **`docker compose` só de dentro de `infra/`** — o `docker-compose.yml` não está na raiz; pipe com `tail` mascara o exit code.
+2. **`.env` central na raiz** — lido pelo compose (portas, `DATA_DIR`/`MEDIA_DIR`) e pelo dev local. `DATABASE_URL` é derivada de `DATA_DIR` (`packages/database/src/url.ts`); só a **api** roda `prisma db push` no boot e o playout espera ela ficar `healthy` — não ponha `db push` no playout (dois escritores no SQLite).
 3. **Mudanças na grade valem a partir do próximo tick (5s)** — o vídeo em execução não é interrompido; a fila só se refaz quando o _programa_ (bloco) muda.
 4. **Fila estável**: o worker gera lotes de 10 e consome em ordem (`queue.shift()`); regenera só quando bloco muda, fila esvazia ou boot. Não "recalcule a cada escolha" (reordenação sozinha = bug).
 5. **ffmpeg com 2 inputs** (vídeo itag 137 + áudio webm): morte terminal de input é só
@@ -90,7 +89,7 @@ nginx :3000 = front door (SPA, /api, /hls, /epg via API)
    atualizar, rebuild do container `playout` (comando acima). Bot-check do YouTube é
    transitório — o canal se auto-recupera, não trate como bug de código.
 7. **Vitest não cobre `apps/web`** e `typecheck` não cobre `apps/web` — valide o front com `npm run build:web`.
-8. **`MEDIA_MTX_URL`** aponta para `rtsp://mediamtx:8554` no compose e `rtsp://localhost:8554` no dev local — não "conserte" um para o outro.
+8. **`MEDIA_MTX_URL`** aponta para `rtsp://mediamtx:8554` no compose e `rtsp://localhost:8554` no dev local — não "conserte" um para o outro (endereços internos ficam fixos no compose, nunca no `.env`).
 9. **Testes do engine usam linhas reais de stderr do ffmpeg** — ao mexer em classificação de erros, atualize os fixtures com saída de produção.
 
 10. **Falhas de reprodução são classificadas** (`packages/core/failures.ts`): infra
@@ -98,7 +97,7 @@ nginx :3000 = front door (SPA, /api, /hls, /epg via API)
     vídeo faz 3 tentativas e depois quarentena de 24 h (em memória). Não trate
     `error` genérico — grave `error:<kind>` (`errorResult`) e atualize `FAILURE_INFO`.
 11. **MediaMTX "Up" mas sem rede** (Docker Desktop): `docker inspect -f '{{json .NetworkSettings.Networks}}' antenna-mediamtx`
-    vazio → `docker compose up -d --force-recreate mediamtx` (em `infra/`).
+    vazio → `docker compose up -d --force-recreate mediamtx`.
 
 ## Checklist antes de considerar pronto
 

@@ -9,15 +9,15 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:api": "npm run dev -w @antenna/api",
+    "dev:api": "npm run db:push && npm run dev -w @antenna/api",
     "dev:playout": "npm run dev -w @antenna/playout",
     "dev:web": "npm run dev -w @antenna/web",
     "build:web": "npm run build -w @antenna/web",
     "typecheck": "tsc -p packages/shared --noEmit && tsc -p packages/database --noEmit && tsc -p packages/core --noEmit && tsc -p apps/api --noEmit && tsc -p apps/playout --noEmit",
     "test": "vitest run",
     "lint": "eslint packages/core/src packages/shared/src apps/api/src apps/playout/src",
-    "db:push": "prisma db push --schema packages/database/prisma/schema.prisma",
-    "db:generate": "prisma generate --schema packages/database/prisma/schema.prisma",
+    "db:push": "tsx packages/database/scripts/prisma.ts db push --skip-generate",
+    "db:generate": "tsx packages/database/scripts/prisma.ts generate",
     "migrate:v1": "tsx packages/database/src/migrate-from-v1.ts"
   },
   "devDependencies": {

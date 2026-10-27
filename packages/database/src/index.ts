@@ -1,6 +1,9 @@
 import { PrismaClient } from "@prisma/client";
+import { resolveDatabaseUrl } from "./url";
 
-export const prisma = new PrismaClient();
+export { ROOT_DIR, dataDir, resolveDatabaseUrl } from "./url";
+
+export const prisma = new PrismaClient({ datasources: { db: { url: resolveDatabaseUrl() } } });
 
 /**
  * Conecta e ajusta o SQLite para coexistência API (controle) + playout (worker):

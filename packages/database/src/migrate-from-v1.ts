@@ -13,8 +13,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { execSync } from "node:child_process";
 import path from "node:path";
-import "dotenv/config";
-import { prisma } from "./index";
+import { prisma, resolveDatabaseUrl } from "./index";
 
 type Row = Record<string, unknown>;
 
@@ -28,7 +27,7 @@ const fromPath = path.resolve(arg("--from") || DEFAULT_V1);
 const force = process.argv.includes("--force");
 
 // DATABASE_URL=file:.../antenna.db?connection_limit=1 -> caminho do arquivo
-const dbUrl = process.env.DATABASE_URL || "";
+const dbUrl = resolveDatabaseUrl();
 const toPath = dbUrl.replace(/^file:/, "").split("?")[0];
 if (!toPath) {
   console.error("DATABASE_URL não definida (.env). Ex.: file:.../data/antenna.db");
