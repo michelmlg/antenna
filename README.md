@@ -15,21 +15,9 @@
 
 ---
 
-> [!WARNING]
-> **Projeto pessoal, aberto ao público — sem vínculo, apoio ou garantia.**
-> O Antenna é um projeto de hobby, criado para uso doméstico em rede local e publicado
-> apenas para estudo e para quem quiser rodar o seu. Ele **não é afiliado ao YouTube/Google**,
-> ao [`yt-dlp`](https://github.com/yt-dlp/yt-dlp), ao FFmpeg, ao MediaMTX ou ao Jellyfin.
->
-> - O Antenna **não hospeda, baixa nem redistribui** vídeos: ele apenas lista metadados
->   e repassa, na sua rede, o stream que o `yt-dlp` resolve — e depende dele para isso.
-> - O uso do `yt-dlp` com o YouTube pode **violar os Termos de Serviço** da plataforma e
->   o YouTube pode mudar ou bloquear o acesso a qualquer momento. **Qualquer problema**
->   (bloqueio, conta/IP limitado, vídeos que deixam de tocar, notificações de direitos
->   autorais) é de **responsabilidade exclusiva de quem usa**.
-> - Use só para fins **pessoais**, com conteúdo que você tem direito de assistir, e **não
->   exponha o canal à internet** nem o use comercialmente.
-> - O software é fornecido "como está" (veja a [licença](LICENSE)), sem suporte garantido.
+> [!NOTE]
+> Projeto pessoal, de uso doméstico e aberto ao público, sem vínculo com o YouTube nem
+> com o `yt-dlp`. Leia o [**aviso e isenção de responsabilidade**](#aviso-e-isenção-de-responsabilidade).
 
 ---
 
@@ -68,6 +56,7 @@ minutos o canal está no ar.
 - [Operação e manutenção](#operação-e-manutenção)
 - [Desenvolvimento](#desenvolvimento)
 - [Estrutura do repositório](#estrutura-do-repositório)
+- [Aviso e isenção de responsabilidade](#aviso-e-isenção-de-responsabilidade)
 - [Segurança e uso responsável](#segurança-e-uso-responsável)
 - [Solução de problemas](#solução-de-problemas)
 - [Licença](#licença)
@@ -429,6 +418,23 @@ data/         banco SQLite e logo (criado em runtime)
 media/        arquivos locais de vídeo
 ```
 
+## Aviso e isenção de responsabilidade
+
+**Projeto pessoal, aberto ao público — sem vínculo, apoio ou garantia.**
+O Antenna é um projeto de hobby, criado para uso doméstico em rede local e publicado
+apenas para estudo e para quem quiser rodar o seu. Ele **não é afiliado ao YouTube/Google**,
+ao [`yt-dlp`](https://github.com/yt-dlp/yt-dlp), ao FFmpeg, ao MediaMTX ou ao Jellyfin.
+
+- O Antenna **não hospeda, baixa nem redistribui** vídeos: ele apenas lista metadados
+  e repassa, na sua rede, o stream que o `yt-dlp` resolve — e depende dele para isso.
+- O uso do `yt-dlp` com o YouTube pode **violar os Termos de Serviço** da plataforma e
+  o YouTube pode mudar ou bloquear o acesso a qualquer momento. **Qualquer problema**
+  (bloqueio, conta/IP limitado, vídeos que deixam de tocar, notificações de direitos
+  autorais) é de **responsabilidade exclusiva de quem usa**.
+- Use só para fins **pessoais**, com conteúdo que você tem direito de assistir, e **não
+  exponha o canal à internet** nem o use comercialmente.
+- O software é fornecido "como está" (veja a [licença](LICENSE)), sem suporte garantido.
+
 ## Segurança e uso responsável
 
 - **Pensado para LAN.** Não exponha o painel diretamente à internet. Se precisar de
@@ -438,7 +444,7 @@ media/        arquivos locais de vídeo
 - O segredo `hlsCDNSecret` no `mediamtx.yml`/`nginx.conf` apenas evita o _cookie-check_
   do HLS para clientes como o Jellyfin; **não é um mecanismo de autenticação**. Troque-o
   nos dois arquivos se quiser um valor próprio.
-- Sobre o YouTube, o `yt-dlp` e direitos autorais, leia o [aviso no início](#antenna):
+- Sobre o YouTube, o `yt-dlp` e direitos autorais, leia o [aviso e isenção de responsabilidade](#aviso-e-isenção-de-responsabilidade):
   é um projeto pessoal, de uso doméstico e por sua conta e risco.
 
 ## Solução de problemas
