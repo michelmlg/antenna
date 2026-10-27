@@ -663,3 +663,37 @@ XMLTV = `http://<host>:3000/api/v1/epg/guide.xml`; Map channels (o
 endpoints 200 pelo front door (SPA/api/hls/epg), M3U ecoando host:porta
 corretos. Follow-ups: EPG por mídia (títulos reais da fila), logo do canal,
 `hlsSegmentDuration` fixo no MediaMTX.
+
+## Falhas de reprodução: classificar, repetir e poupar o vídeo (26/10/2026)
+
+**Problema**: 57 dos últimos 60 itens do histórico eram `error` (~4 s cada).
+Duas causas misturadas: (1) 403 do googlevideo em parte das URLs recém-
+resolvidas; (2) container `mediamtx` "Up" porém sem rede no Docker Desktop
+(`Failed to resolve hostname mediamtx`). Cada falha queimava um item da fila.
+
+**Decisões**
+- `packages/core/failures.ts` (puro, testado): classifica falha em
+  `source_forbidden | source_unresolvable | sink_unreachable | input_died |
+  unknown`, backoff (3→30 s), quarentena e disjuntor. Rótulos/explicações em
+  `FAILURE_INFO` (`packages/shared`), usados também pelo painel.
+- **Culpa**: falha de infra (`sink_unreachable`) NUNCA conta contra o vídeo —
+  o MESMO item é repetido (`state.pending`) com backoff; falha do vídeo é
+  tentada até 3× (yt-dlp novo + pré-checagem `Range: bytes=0-1`) antes de o
+  item ser descartado.
+- `probeSink()` (TCP ao MediaMTX) antes de resolver/spawnar; ffmpeg que morre
+  sem causa no stderr + destino mudo = `sink_unreachable`.
+- **Disjuntor**: 3 falhas seguidas de publicação = `blocked` (fila pausada,
+  retry a cada ≤30 s, `/health` do worker → healthcheck `unhealthy` no
+  `docker ps`). Zera quando o ffmpeg fica vivo ≥ 15 s (também limpa `lastError`).
+- **Quarentena**: 3 falhas de vídeo (com retries esgotados) = 24 h fora da
+  rotação, em memória (some no restart do worker). `DELETE
+  /playout/quarantine[/:mediaId]` libera; `play-now` manual vence.
+- Histórico: `result = "error:<kind>"` (string livre — sem migração; `error`
+  legado continua válido). Boot do worker fecha linhas `playing` penduradas.
+- Painel Atividade: diagnóstico com causa/ação, contagem por tipo (clicável →
+  filtra Exibidos), resumo vídeo × infra, aba Quarentena.
+
+**Limites**: o 403 do YouTube não tem correção definitiva (só mitigação). O
+MediaMTX sem rede é do Docker Desktop: `docker compose up -d --force-recreate
+mediamtx` (dentro de `infra/`). A imagem do mediamtx é `scratch` (sem shell),
+por isso não há healthcheck nela.

@@ -1,10 +1,10 @@
-/** Trilha de um dia da semana: label fixa à esquerda + eixo do dia em minutos. */
-import { useDroppable } from "@dnd-kit/core";
-import { minutesToHHMM } from "./time";
-import type { ScheduleRow } from "../../lib/api";
-import { GhostBlock, ScheduleBlock, type ResizeMode } from "./ScheduleBlock";
-import { LANE_H } from "./time";
+/** Trilha de um dia da semana: rótulo fixo à esquerda + eixo do dia em minutos. */
 import type React from "react";
+import { useDroppable } from "@dnd-kit/core";
+import type { ScheduleRow } from "../../lib/api";
+import { cn } from "../../components/ui";
+import { GhostBlock, ScheduleBlock, type ResizeMode } from "./ScheduleBlock";
+import { LABEL_W, LANE_H, minutesToHHMM } from "./time";
 
 export interface Preview {
   dow: number;
@@ -17,6 +17,7 @@ interface Props {
   dow: number;
   name: string;
   px: number;
+  hourPx: number;
   blocks: ScheduleRow[];
   today: boolean;
   nowMin: number | null; // null → linha "agora" fora
@@ -25,12 +26,10 @@ interface Props {
   selectedId: string | null;
   pendingIds: Set<string>;
   preview: Preview | null;
-  hourPx: number;
   registerTrack: (dow: number, el: HTMLDivElement | null) => void;
   onPick: (e: React.PointerEvent, row: ScheduleRow, mode: ResizeMode) => void;
   onPickMove: (e: React.PointerEvent) => void;
   onPickUp: (e: React.PointerEvent) => void;
-  onOpen: (row: ScheduleRow) => void;
   onDuplicate: (row: ScheduleRow) => void;
   onDelete: (row: ScheduleRow) => void;
 }
@@ -39,6 +38,7 @@ export function DayLane({
   dow,
   name,
   px,
+  hourPx,
   blocks,
   today,
   nowMin,
@@ -47,51 +47,54 @@ export function DayLane({
   selectedId,
   pendingIds,
   preview,
-  hourPx,
   registerTrack,
   onPick,
   onPickMove,
   onPickUp,
-  onOpen,
   onDuplicate,
   onDelete,
 }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: `lane-${dow}` });
 
+  // grade de horas (e meias-horas com zoom alto) desenhada no fundo da trilha
   const gridStyle: React.CSSProperties = {
     width: 1440 * px,
     height: LANE_H,
     backgroundImage:
       px >= 1.5
-        ? "repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0 1px, transparent 1px var(--hour-px)), repeating-linear-gradient(to right, rgba(255,255,255,0.025) 0 1px, transparent 1px calc(var(--hour-px) / 2))"
-        : "repeating-linear-gradient(to right, rgba(255,255,255,0.06) 0 1px, transparent 1px var(--hour-px))",
+        ? "repeating-linear-gradient(to right, rgba(255,255,255,0.05) 0 1px, transparent 1px var(--hour-px)), repeating-linear-gradient(to right, rgba(255,255,255,0.02) 0 1px, transparent 1px calc(var(--hour-px) / 2))"
+        : "repeating-linear-gradient(to right, rgba(255,255,255,0.05) 0 1px, transparent 1px var(--hour-px))",
     ["--hour-px" as string]: `${hourPx}px`,
   };
 
   return (
-    <div className="flex border-b border-muted/10" style={{ height: LANE_H }}>
+    <div
+      className={cn("flex border-b border-line last:border-b-0", today && "bg-brand/[0.03]")}
+      style={{ height: LANE_H }}
+    >
       <div
-        className={`sticky left-0 z-20 flex w-20 shrink-0 items-center justify-end border-r ${
-          today ? "border-signal/60 bg-signal/10" : "border-muted/20 bg-surface"
-        } pr-2`}
+        className="sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r border-line bg-panel px-4"
+        style={{ width: LABEL_W }}
       >
-        <span
-          className={`text-xs font-semibold uppercase tracking-wide ${today ? "text-signal" : "text-muted"}`}
-        >
+        <span className={cn("text-[13px]", today ? "font-medium text-brand" : "text-sub")}>
           {name}
         </span>
+        {today && <span className="text-[10px] text-brand/80">hoje</span>}
       </div>
       <div
         ref={(el) => {
           setNodeRef(el);
           registerTrack(dow, el);
         }}
-        className={`relative touch-none ${isOver && preview ? "bg-white/[0.03]" : ""}`}
+        className={cn(
+          "relative touch-none transition-colors duration-150",
+          isOver && preview && "bg-brand/[0.05]",
+        )}
         style={gridStyle}
       >
-        {blocks.length === 0 && (
-          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted italic">
-            {today && nowMin !== null ? "" : "livre (auto)"}
+        {blocks.length === 0 && !(today && nowMin !== null) && (
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[11px] italic text-dim">
+            livre — seleção automática
           </span>
         )}
         {blocks.map((r) => (
@@ -105,32 +108,27 @@ export function DayLane({
             onPick={onPick}
             onPickUp={onPickUp}
             onPickMove={onPickMove}
-            onOpen={onOpen}
             onDuplicate={onDuplicate}
             onDelete={onDelete}
           />
         ))}
         {guideMin !== null && (
           <div
-            className="pointer-events-none absolute inset-y-0 z-[3] w-px bg-signal/40"
+            className="pointer-events-none absolute inset-y-0 z-[3] w-px bg-brand/40"
             style={{ left: guideMin * px }}
           />
         )}
         {preview && preview.dow === dow && (
-          <GhostBlock
-            dow={dow}
-            start={preview.start}
-            end={preview.end}
-            valid={preview.valid}
-            px={px}
-          />
+          <GhostBlock start={preview.start} end={preview.end} valid={preview.valid} px={px} />
         )}
         {today && nowMin !== null && (
           <div
-            className="pointer-events-none absolute top-0 z-[7] w-0.5 bg-signal"
-            style={{ left: (nowMin / 60) * hourPx, height: LANE_H }}
+            className="pointer-events-none absolute inset-y-0 z-[7] w-0.5 bg-brand"
+            style={{ left: (nowMin / 60) * hourPx }}
             title={`agora ${minutesToHHMM(nowMin)}`}
-          />
+          >
+            <i className="absolute -left-[3px] -top-0.5 h-2 w-2 rounded-full bg-brand" />
+          </div>
         )}
       </div>
     </div>

@@ -4,12 +4,35 @@
  * Prioridade de escolha: gênero da grade (mistura viva) → seleção automática → fallback.
  */
 import { prisma } from "@antenna/database";
-import type { PlayoutStatePayload, QueueItem } from "@antenna/shared";
+import { FAILURE_INFO, type Failure, type FailureKind, type PlayoutStatePayload, type QueueItem } from "@antenna/shared";
 import { composeCycle, fallbackMedia, selectAuto } from "@antenna/core";
 import { currentBlock } from "@antenna/core";
+import {
+  backoffMs,
+  blamesMedia,
+  classifyFfmpegLine,
+  clearMediaFailure,
+  errorResult,
+  isQuarantined,
+  pruneQuarantine,
+  recordMediaFailure,
+  sinkStatus,
+  type FailureRecord,
+} from "@antenna/core";
 import { config } from "./config";
-import { isFfmpegError, isYoutube, isInputDeath, killProc, probeVideoCodec, resolveInput, spawnFFmpeg } from "./engine";
+import {
+  isFfmpegError,
+  isYoutube,
+  killProc,
+  preflightInputs,
+  probeSink,
+  probeVideoCodec,
+  resolveInput,
+  sinkHost,
+  spawnFFmpeg,
+} from "./engine";
 import { writeState } from "./state";
+import { loadLogoOverlay } from "./branding";
 
 type Picked = {
   media: { id: string; title: string; url: string; source: string; duration: number };
@@ -19,6 +42,8 @@ type Picked = {
 
 const QUEUE_BATCH = 10; // itens gerados por vez
 const QUEUE_MIN = 2; // repõe o lote quando resta <= MIN
+const MAX_ATTEMPTS = 3; // resolve+pré-checagem do MESMO vídeo antes de desistir dele
+const STABLE_AFTER_S = 15; // ffmpeg vivo por tanto tempo = publicação estável (zera contadores)
 
 const state = {
   running: false,
@@ -36,11 +61,62 @@ const state = {
   restarts: 0,
   lastError: null as string | null,
   fallbackMediaId: config.fallbackMediaId,
+  // --- falhas (ver packages/core/failures) ---
+  pending: null as Picked | null, // item a repetir: o destino caiu, não é culpa do vídeo
+  procFailure: null as FailureKind | null, // 1ª falha classificada do ffmpeg ATUAL
+  procStartedAt: 0,
+  sinkFailures: 0, // falhas seguidas de publicação (disjuntor do MediaMTX)
+  mediaStreak: 0, // vídeos seguidos que falharam (YouTube bloqueando?)
+  counts: {} as Record<string, number>,
+  lastFailure: null as Failure | null,
+  failures: new Map<string, FailureRecord>(),
+  failTitles: new Map<string, string>(),
 };
+
+/** Registra a falha para o painel: contador, última causa e mensagem legível. */
+function noteFailure(kind: FailureKind, detail: string, title: string | null, attempt?: number): void {
+  state.counts[kind] = (state.counts[kind] ?? 0) + 1;
+  const tries = attempt ? ` (tentativa ${attempt}/${MAX_ATTEMPTS})` : "";
+  state.lastFailure = {
+    kind,
+    message: detail,
+    title,
+    at: new Date().toISOString(),
+    attempt: attempt ?? null,
+    maxAttempts: attempt ? MAX_ATTEMPTS : null,
+  };
+  state.lastError = `${FAILURE_INFO[kind].label}${detail ? ` — ${detail}` : ""}${tries}${title ? ` · ${title}` : ""}`;
+  console.log(`[playout] falha ${kind}: ${detail}${tries}${title ? " · " + title : ""}`);
+}
+
+/** O vídeo falhou de vez (retries esgotados): conta para a quarentena. */
+function registerMediaFailure(media: { id: string; title: string }, kind: FailureKind): void {
+  const rec = recordMediaFailure(state.failures, media.id, kind, Date.now());
+  state.failTitles.set(media.id, media.title);
+  state.mediaStreak += 1;
+  if (rec.until) console.log(`[playout] quarentena 24h: ${media.title} (${rec.count} falhas, ${kind})`);
+}
+
+/** O destino não aceitou: disjuntor conta e o MESMO item é repetido com backoff. */
+function registerSinkFailure(detail: string, title: string | null, retry: Picked | null): void {
+  state.sinkFailures += 1;
+  noteFailure("sink_unreachable", detail, title);
+  if (retry) state.pending = retry;
+  state.cooldownUntil = Date.now() + backoffMs(state.sinkFailures);
+}
+
+/** Ids fora de rotação por quarentena (elegíveis de novo quando vencem). */
+function quarantinedIds(): string[] {
+  const now = Date.now();
+  pruneQuarantine(state.failures, now);
+  return [...state.failures].filter(([, r]) => r.until > now).map(([id]) => id);
+}
 
 function onFfmpegLine(line: string): void {
   if (isFfmpegError(line)) {
-    state.lastError = line;
+    // lastError só vira texto legível quando a falha é classificada (feito em
+    // tick/registerFailure); a linha crua fica no log
+    if (!classifyFfmpegLine(line, { sinkHost: sinkHost() })) state.lastError = line;
     console.log("[ffmpeg] ERRO:", line);
   } else {
     console.log("[ffmpeg]", line); // avisos ficam só no log do worker
@@ -104,7 +180,9 @@ async function ensureQueue(program: Awaited<ReturnType<typeof scheduledProgram>>
   }
   if (state.queue.length > QUEUE_MIN) return;
 
-  const excludeIds = [...new Set([state.current?.media.id, ...state.queue.map((q) => q.mediaId)].filter(Boolean) as string[])];
+  const excludeIds = [
+    ...new Set([state.current?.media.id, ...state.queue.map((q) => q.mediaId), ...quarantinedIds()].filter(Boolean) as string[]),
+  ];
   let fresh: QueueItem[] = [];
 
   if (program && program.genreId && program.genreStatus !== "pausado") {
@@ -133,9 +211,18 @@ async function ensureQueue(program: Awaited<ReturnType<typeof scheduledProgram>>
 
 // ---- próxima mídia: consome a fila → automática única → fallback ----
 async function pickNext(program: Awaited<ReturnType<typeof scheduledProgram>>): Promise<Picked | null> {
+  // destino caiu antes: repete o MESMO item (a fila não anda por falha de infra)
+  if (state.pending) {
+    const p = state.pending;
+    state.pending = null;
+    if (!isQuarantined(state.failures, p.media.id, Date.now())) return p;
+  }
+
   await ensureQueue(program);
 
-  const head = state.queue.shift();
+  let head = state.queue.shift();
+  // vídeos em quarentena ficam de fora (voltam sozinhos quando vencer)
+  while (head && isQuarantined(state.failures, head.mediaId, Date.now())) head = state.queue.shift();
   if (head) {
     return {
       media: { id: head.mediaId, title: head.title, url: head.url, source: head.source, duration: head.duration },
@@ -143,7 +230,11 @@ async function pickNext(program: Awaited<ReturnType<typeof scheduledProgram>>): 
     };
   }
 
-  const [auto] = await selectAuto({ recentCount: 10, limit: 1 });
+  let [auto] = await selectAuto({ recentCount: 10, limit: 1 });
+  // (excludeIds substitui o anti-repeat do selectAuto; só entra quando o sorteio caiu em quarentena)
+  if (auto && isQuarantined(state.failures, auto.id, Date.now())) {
+    [auto] = await selectAuto({ limit: 1, excludeIds: quarantinedIds() });
+  }
   if (auto) return { media: auto, program };
 
   const fb = await fallbackMedia(state.fallbackMediaId);
@@ -166,49 +257,107 @@ async function finishCurrent(result: string): Promise<void> {
   }
 }
 
-async function startItem(picked: Picked, opts: { isFallbackRetry?: boolean } = {}): Promise<void> {
-  if (state.starting) return; // serializa: impede dois FFmpeg juntos
+async function startItem(picked: Picked, opts: StartOpts = {}): Promise<boolean> {
+  if (state.starting) return false; // serializa: impede dois FFmpeg juntos
   state.starting = true;
   try {
-    await doStartItem(picked, opts);
+    return await doStartItem(picked, opts);
   } finally {
     state.starting = false;
   }
 }
 
-async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } = {}): Promise<void> {
+type StartOpts = {
+  isFallbackRetry?: boolean;
+  /** retomar o item ATUAL do segundo N (troca de logo) — mantém início/histórico */
+  resumeAt?: number;
+};
+
+/** true = FFmpeg novo no ar. */
+async function doStartItem(picked: Picked, opts: StartOpts = {}): Promise<boolean> {
+    const resuming = opts.resumeAt != null;
     const old = state.proc; // handover: o novo assume o path ANTES de o velho morrer
-    let inputs: string[];
-    try {
-      inputs = await resolveInput(picked.media);
-    } catch (err) {
-      state.lastError = err instanceof Error ? err.message : String(err);
-      console.error("[playout]", state.lastError);
+    const title = picked.media.title;
+
+    // 1) o destino aceita publicação? Se não, NÃO gasta o vídeo: repete o mesmo item com backoff.
+    const sink = await probeSink();
+    if (!sink.ok) {
+      registerSinkFailure(sink.reason ?? "inacessível", title, resuming ? null : picked);
+      return false;
+    }
+
+    // 2) resolve + pré-checa as URLs; falha do vídeo é tentada de novo (URL nova a cada vez)
+    const maxAttempts = resuming ? 1 : MAX_ATTEMPTS;
+    let inputs: string[] | null = null;
+    let failKind: FailureKind = "source_unresolvable";
+    for (let attempt = 1; attempt <= maxAttempts && !inputs; attempt++) {
+      let detail: string;
+      try {
+        const urls = await resolveInput(picked.media);
+        const pf = await preflightInputs(urls);
+        if (pf.ok) {
+          inputs = urls;
+          break;
+        }
+        failKind = "source_forbidden";
+        detail = `HTTP ${pf.status}`;
+      } catch (err) {
+        failKind = "source_unresolvable";
+        detail = err instanceof Error ? err.message : String(err);
+      }
+      noteFailure(failKind, detail, title, attempt);
+      if (attempt < maxAttempts) await new Promise((r) => setTimeout(r, backoffMs(attempt, 2000, 8000)));
+    }
+
+    if (!inputs) {
+      if (resuming) return false; // retomada falhou: o FFmpeg antigo segue no ar
+      // retries esgotados: o vídeo é descartado (e fica registrado no histórico)
+      registerMediaFailure(picked.media, failKind);
+      state.errors += 1;
+      const now = new Date();
+      await prisma.playbackHistory
+        .create({
+          data: {
+            mediaId: picked.media.id,
+            programId: picked.program ? picked.program.id : null,
+            channel: config.channel,
+            startedAt: now,
+            finishedAt: now,
+            duration: 0,
+            result: errorResult(failKind),
+          },
+        })
+        .catch((e) => console.error("[playout] history:", e instanceof Error ? e.message : e));
       if (!opts.isFallbackRetry) {
         const fb = await fallbackMedia(state.fallbackMediaId);
         if (fb && fb.id !== picked.media.id) {
-          await doStartItem({ media: fb, program: null, isFallback: true }, { isFallbackRetry: true });
-          return;
+          return doStartItem({ media: fb, program: null, isFallback: true }, { isFallbackRetry: true });
         }
       }
-      state.cooldownUntil = Date.now() + 5000;
-      return;
+      state.cooldownUntil = Date.now() + 2000;
+      return false;
     }
 
     state.inputDead = false; // sinal do proc anterior não contamina o novo
+    state.procFailure = null;
     // YouTube: SEMPRE transcodifica; local: copy se h264
     const fromYT = isYoutube(picked.media.url, picked.media.source);
-    const videoCodec = fromYT ? null : await probeVideoCodec(inputs[0]);
+    const logo = await loadLogoOverlay(); // com logo, sempre transcodifica (sem sonda)
+    const videoCodec = fromYT || logo ? null : await probeVideoCodec(inputs[0]);
     const proc = spawnFFmpeg(inputs, videoCodec, (line) => {
       onFfmpegLine(line);
+      if (state.proc !== proc) return; // linhas de procs antigos caem fora
+      const kind = classifyFfmpegLine(line, { sinkHost: sinkHost() });
+      if (kind) state.procFailure ??= kind; // a PRIMEIRA falha é a causa; o resto é consequência
       // morte terminal de input no proc ATUAL → o par vídeo/áudio quebrou;
-      // o tick corta o item e avança (ver tick). Linhas de procs antigos caem fora.
-      if (state.proc === proc && isInputDeath(line)) {
+      // o tick corta o item e avança (ver tick).
+      if (kind === "input_died") {
         state.inputDead = true;
         console.log("[playout] input morreu — corte no próximo tick");
       }
-    });
+    }, logo, opts.resumeAt ?? 0);
     state.proc = proc;
+    state.procStartedAt = Date.now();
     // MediaMTX troca publicadores no mesmo path de forma atômica (o novo entra,
     // o antigo é chutado) — dá um tempo pro handshake do novo e só então mata
     // o velho: o muxer HLS nunca fica sem publicador (sem vão de 404/EOF).
@@ -225,6 +374,12 @@ async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } =
       }
     });
 
+    if (resuming && state.current) {
+      // mesmo item, mesmo relógio: o fim continua calculado pelo startedAt original
+      state.current.pid = proc.pid ?? null;
+      console.log(`[playout] >>> retomado em ${Math.floor(opts.resumeAt ?? 0)}s (personalização) pid=${proc.pid}`);
+      return true;
+    }
     const startedAt = new Date();
     const history = await prisma.playbackHistory.create({
       data: {
@@ -240,6 +395,7 @@ async function doStartItem(picked: Picked, opts: { isFallbackRetry?: boolean } =
     console.log(
       `[playout] >>> ${picked.media.title}${picked.program ? " (" + picked.program.name + ")" : ""} pid=${proc.pid}`
     );
+    return true;
 }
 
 // ---- tick ----
@@ -247,6 +403,8 @@ async function tick(): Promise<void> {
   if (!state.running) return;
   if (state.starting) return;
   if (Date.now() < state.cooldownUntil) {
+    // backoff longo (destino fora): segue publicando o estado, senão o painel marca "atrasada"
+    await publish().catch((e) => console.error("[playout] publish:", e));
     return;
   }
 
@@ -255,22 +413,54 @@ async function tick(): Promise<void> {
     const program = await scheduledProgram();
 
     if (!procAlive && state.current) {
-      await finishCurrent("error");
-      state.cooldownUntil = Date.now() + 3000;
+      // o ffmpeg morreu: a causa classificada decide quem leva a culpa
+      const cur = state.current;
+      let kind = state.procFailure ?? "unknown";
+      state.procFailure = null;
+      // morte sem causa no stderr (ex.: conexão RTSP caiu): se o destino não responde, é ele
+      if (kind === "unknown" && !(await probeSink()).ok) kind = "sink_unreachable";
+      await finishCurrent(errorResult(kind));
+      if (kind === "sink_unreachable") {
+        // infra: o vídeo não tem culpa — repete o mesmo item quando o destino voltar
+        registerSinkFailure("a publicação no MediaMTX caiu", cur.media.title, {
+          media: cur.media,
+          program: cur.program,
+          isFallback: cur.isFallback,
+        });
+      } else {
+        noteFailure(kind, "o ffmpeg encerrou", cur.media.title);
+        if (blamesMedia(kind)) registerMediaFailure(cur.media, kind);
+        state.cooldownUntil = Date.now() + 3000;
+      }
     }
 
     if (procAlive && state.current) {
+      const alive = (Date.now() - state.procStartedAt) / 1000;
+      if (alive >= STABLE_AFTER_S && (state.sinkFailures || state.mediaStreak || state.lastError)) {
+        // publicação estável: zera disjuntor/contadores e limpa o erro do painel
+        state.sinkFailures = 0;
+        state.mediaStreak = 0;
+        state.lastError = null;
+        state.lastFailure = null;
+        clearMediaFailure(state.failures, state.current.media.id);
+      }
       const elapsed = (Date.now() - state.current.startedAt.getTime()) / 1000;
       const durationEnded = state.current.media.duration > 0 && elapsed >= state.current.media.duration;
       const programChanged = !!program && state.current.program?.id !== program.id;
       if (durationEnded || programChanged || state.inputDead) {
         // input morto (sem fim natural) → "error": o par vídeo/áudio quebrou no ar
         // (sem killProc aqui: o handover do startItem troca publicadores sem vão)
-        await finishCurrent(!durationEnded && state.inputDead ? "error" : state.current.isFallback ? "fallback" : "success");
+        const cut = !durationEnded && state.inputDead;
+        const cur = state.current;
+        await finishCurrent(cut ? errorResult("input_died") : cur.isFallback ? "fallback" : "success");
+        if (cut) {
+          noteFailure("input_died", "vídeo ou áudio parou no ar", cur.media.title);
+          registerMediaFailure(cur.media, "input_died");
+        }
       }
     }
 
-    if (!state.current && !state.starting) {
+    if (!state.current && !state.starting && Date.now() >= state.cooldownUntil) {
       const picked = await pickNext(program);
       if (picked) {
         await startItem(picked);
@@ -295,6 +485,13 @@ async function tick(): Promise<void> {
 // ---- controles ----
 async function start(): Promise<void> {
   if (state.running) return;
+  // nada está no ar ainda: "playing" que sobrou é de um worker que reiniciou no meio
+  await prisma.playbackHistory
+    .updateMany({
+      where: { channel: config.channel, result: "playing" },
+      data: { result: "stopped", finishedAt: new Date() },
+    })
+    .catch((e) => console.error("[playout] history:", e instanceof Error ? e.message : e));
   state.running = true;
   state.since = new Date();
   state.cooldownUntil = 0;
@@ -307,6 +504,7 @@ async function stop(): Promise<void> {
   state.running = false;
   if (state.timer) clearInterval(state.timer);
   state.timer = null;
+  state.pending = null;
   await finishCurrent("stopped");
   killProc(state.proc);
   state.proc = null;
@@ -323,6 +521,8 @@ async function playNow(mediaId: string): Promise<void> {
   if (!state.running) await start();
   await finishCurrent("stopped");
   state.cooldownUntil = 0;
+  state.pending = null;
+  clearMediaFailure(state.failures, media.id); // escolha manual vence a quarentena
   // se a mídia estava na fila, sai dela (senão o shift() a tocaria de novo em seguida)
   state.queue = state.queue.filter((q) => q.mediaId !== media.id);
   const program = await scheduledProgram();
@@ -352,6 +552,14 @@ async function skipNext(): Promise<void> {
     state.cooldownUntil = Date.now() + 5000;
   }
   await publish().catch(() => {});
+}
+
+/** Tira um vídeo (ou todos) da quarentena. */
+function releaseQuarantine(mediaId?: string): number {
+  if (mediaId) return clearMediaFailure(state.failures, mediaId) ? 1 : 0;
+  const n = state.failures.size;
+  state.failures.clear();
+  return n;
 }
 
 // ---- fila projetada: lê a fila PERSISTIDA (não recalcula nada) ----
@@ -390,7 +598,38 @@ function payload(): PlayoutStatePayload {
     restarts: state.restarts,
     lastError: state.lastError,
     fallbackMediaId: state.fallbackMediaId,
+    health: healthPayload(),
+    quarantine: quarantinePayload(),
   };
+}
+
+function healthPayload(): NonNullable<PlayoutStatePayload["health"]> {
+  const sink = sinkStatus(state.sinkFailures);
+  const now = Date.now();
+  return {
+    // vários vídeos seguidos falhando (YouTube bloqueando?) também é degradação
+    status: sink === "ok" && state.mediaStreak >= 5 ? "degraded" : sink,
+    sink: state.sinkFailures > 0 ? "down" : "ok",
+    sinkFailures: state.sinkFailures,
+    nextRetryAt: state.sinkFailures > 0 && state.cooldownUntil > now ? new Date(state.cooldownUntil).toISOString() : null,
+    counts: state.counts,
+    lastFailure: state.lastFailure,
+  };
+}
+
+function quarantinePayload(): NonNullable<PlayoutStatePayload["quarantine"]> {
+  const now = Date.now();
+  pruneQuarantine(state.failures, now);
+  return [...state.failures]
+    .map(([id, r]) => ({
+      mediaId: id,
+      title: state.failTitles.get(id) ?? id,
+      kind: r.kind,
+      failures: r.count,
+      until: r.until > now ? new Date(r.until).toISOString() : null,
+    }))
+    .sort((a, b) => b.failures - a.failures)
+    .slice(0, 30);
 }
 
 async function publish(): Promise<void> {
@@ -410,4 +649,24 @@ function restoreQueue(items: QueueItem[], program: { id: string; name: string } 
   }
 }
 
-export const playout = { start, stop, playNow, skipNext, setFallback, getState, planQueue, restoreQueue };
+/**
+ * Reaplica a personalização (logo) no item que está no ar: sobe um FFmpeg novo
+ * do MESMO vídeo no ponto atual e faz o handover sem vão. Perto do fim, deixa
+ * para o próximo item.
+ */
+async function refreshCurrent(): Promise<{ refreshed: boolean; at?: number }> {
+  const cur = state.current;
+  if (!state.running || !cur || state.starting) return { refreshed: false };
+  const at = (Date.now() - cur.startedAt.getTime()) / 1000;
+  if (cur.media.duration > 0 && at > cur.media.duration - 10) return { refreshed: false };
+  // YouTube às vezes recusa uma URL nova (bot-check transitório): 2ª tentativa
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (state.current !== cur) return { refreshed: false }; // item mudou no meio
+    const now = (Date.now() - cur.startedAt.getTime()) / 1000;
+    if (await startItem(cur, { resumeAt: now })) return { refreshed: true, at: Math.floor(now) };
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  return { refreshed: false };
+}
+
+export const playout = { releaseQuarantine, refreshCurrent, start, stop, playNow, skipNext, setFallback, getState, planQueue, restoreQueue };

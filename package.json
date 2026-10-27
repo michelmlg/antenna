@@ -1,6 +1,7 @@
 {
   "name": "antenna",
   "private": true,
+  "license": "MIT",
   "version": "2.0.0",
   "description": "Antenna — canal de TV linear (playout de YouTube por gênero) na rede local",
   "workspaces": [

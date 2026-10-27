@@ -11,7 +11,10 @@ export const DOWS = [
   ["Sáb", "Sábado"],
 ] as const;
 
-export const LABEL_W = 80; // coluna de dias (cabe "DOMINGO" uppercase)
+/** Ordem de exibição das trilhas: semana começa na segunda (dayOfWeek segue o JS: 0 = domingo). */
+export const DISPLAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
+
+export const LABEL_W = 80; // coluna de dias
 export const LANE_H = 64;
 
 /** Zoom "auto": a semana inteira (1440 min) cabe na largura útil da viewport. */

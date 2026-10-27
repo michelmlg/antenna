@@ -5,15 +5,59 @@
 @tailwind components;
 @tailwind utilities;
 
-html,
-body,
-#root {
-  height: 100%;
-}
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
 
-body {
-  @apply bg-background text-foreground;
-  font-family: "Inter Variable", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  body {
+    @apply bg-base text-fg antialiased;
+    font-family: "Inter Variable", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+
+  /* campos: um único visual em todo o painel. :where() zera a especificidade —
+     utilitários no className (h-8, pl-8, w-full…) sempre vencem o padrão. */
+  :where(
+    input:not([type="checkbox"], [type="radio"], [type="color"], [type="range"]),
+    select,
+    textarea
+  ) {
+    @apply h-9 rounded-lg border border-line bg-raised px-3 text-sm text-fg outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-dim focus:border-brand/70 focus:ring-2 focus:ring-brand/20 disabled:opacity-50;
+  }
+  :where(textarea) {
+    @apply h-auto py-2;
+  }
+  :where(input[type="checkbox"]) {
+    @apply h-4 w-4 accent-brand;
+  }
+  :where(input[type="color"]) {
+    @apply h-9 w-11 cursor-pointer rounded-lg border border-line bg-raised p-1;
+  }
+
+  button,
+  [role="button"] {
+    cursor: pointer;
+  }
+
+  ::selection {
+    @apply bg-brand/30;
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-line;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    @apply bg-element;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 
 /* tempos/durações/contadores: numerais tabulares para não "dançarem" ao atualizar */
@@ -23,46 +67,13 @@ body {
   }
 }
 
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-*::-webkit-scrollbar-thumb {
-  @apply bg-surface rounded;
-}
-*::-webkit-scrollbar-thumb:hover {
-  @apply bg-muted/40;
-}
-*::-webkit-scrollbar-track {
-  @apply bg-background;
-}
-
-input,
-select,
-textarea {
-  @apply bg-background border border-muted/30 rounded-md px-2 py-1.5 text-sm text-foreground outline-none transition-colors focus:border-signal focus:ring-1 focus:ring-signal/40;
-}
-
-button {
-  cursor: pointer;
-}
-
-/* animações curtas (design.md: funcionais, sem exagero) */
-@keyframes overlay-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@keyframes panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+/* movimento reduzido: interações continuam, animações somem */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
   }
 }

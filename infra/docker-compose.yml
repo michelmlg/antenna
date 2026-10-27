@@ -33,6 +33,18 @@ services:
     volumes:
       - ../data:/app/data
       - ../media:/media
+    # "unhealthy" no `docker ps` = worker travado OU disjuntor do MediaMTX aberto
+    # (3+ falhas seguidas de publicação) — ver /health em apps/playout/src/control.ts
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3100/health').then(r=>r.json()).then(j=>process.exit(j.ok&&j.health!=='blocked'?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 2
+      start_period: 40s
 
   api:
     build:

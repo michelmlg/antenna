@@ -1,3 +1,5 @@
+import type { PlayoutHealth, QuarantineEntry } from "@antenna/shared";
+
 /** Cliente HTTP da API (mesma origem; nginx/dev-proxy cuida do encaminhamento). */
 async function req(method: string, path: string, body?: unknown): Promise<unknown> {
   const res = await fetch("/api/v1" + path, {
@@ -155,6 +157,8 @@ export interface PlayoutState {
   restarts: number;
   lastError: string | null;
   fallbackMediaId: string | null;
+  health?: PlayoutHealth;
+  quarantine?: QuarantineEntry[];
   stale?: boolean;
   workerOnline?: boolean;
 }
@@ -198,4 +202,12 @@ export interface StreamInfo {
   hlsPath: string;
   rtspPath: string;
   viewers: number | null;
+}
+
+export interface BrandingPayload {
+  logo: import("@antenna/core/branding").LogoSettings;
+  /** URL da imagem atual (com ?v= para furar cache) */
+  logoUrl: string | null;
+  /** mutações: o worker já reaplicou no item atual (mesmo ponto do vídeo) */
+  applied?: boolean;
 }

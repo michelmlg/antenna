@@ -1,6 +1,7 @@
 /**
  * Grade de Programação — timeline semanal (layout A do PLANO.md §16.1):
  * 7 trilhas horizontais, régua compartilhada, blocos arrastáveis/redimensionáveis.
+ * Toolbar no topo do card, biblioteca em gaveta abaixo (timeline em largura total).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
@@ -13,40 +14,52 @@ import {
   useSensors,
   type Modifier,
 } from "@dnd-kit/core";
-import { useQuery } from "@tanstack/react-query";
-import { Maximize, Plus, Redo2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
-import { Button, Card, Spinner, StatusPill } from "../../components/ui";
-import { api, type GenreRow, type PlayoutState, type ScheduleRow } from "../../lib/api";
 import {
-  hasOverlap,
-  minutesToHHMM,
-  snapMinutes,
-  toMin,
-  cursorMinute,
+  AlertCircle,
+  Check,
+  CircleCheck,
+  Loader2,
+  Maximize,
+  PanelBottom,
+  Plus,
+  Redo2,
+  Trash2,
+  Undo2,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
+import type { GenreRow, ScheduleRow } from "../../lib/api";
+import { useLocalStorage, useMediaQuery, useNow } from "../../lib/hooks";
+import { usePlayoutState } from "../../lib/queries";
+import { GenreTile } from "../../components/GenreTile";
+import {
+  Button,
+  Card,
+  Dropdown,
+  IconButton,
+  Kbd,
+  Spinner,
+  cn,
+  useToast,
+} from "../../components/ui";
+import {
+  DISPLAY_ORDER,
   DOWS,
   LABEL_W,
-  LANE_H,
-  pxPerMinAuto,
   clampedPx,
+  cursorMinute,
+  hasOverlap,
+  minutesToHHMM,
+  pxPerMinAuto,
+  snapMinutes,
+  toMin,
 } from "./time";
 import { useGradeSchedule, type MutationResult, type SchedulePatch } from "./useScheduleMutations";
 import { DayLane, type Preview } from "./DayLane";
-import { LibraryPanel, firstFreeSlot } from "./LibraryPanel";
+import { LibraryDrawer, firstFreeSlot } from "./LibraryDrawer";
 import { BlockModal, type ModalState } from "./BlockModal";
-import { Dropdown } from "./Dropdown";
 import { ProfilesMenu } from "./ProfilesMenu";
 import GradeMobile from "./GradeMobile";
-
-function useIsMobile(): boolean {
-  const [m, setM] = useState(() => window.matchMedia("(max-width: 767px)").matches);
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const h = (e: MediaQueryListEvent) => setM(e.matches);
-    mq.addEventListener("change", h);
-    return () => mq.removeEventListener("change", h);
-  }, []);
-  return m;
-}
 
 interface DragState {
   id: string;
@@ -78,10 +91,18 @@ const anchorOnCursor: Modifier = ({ draggingNodeRect, transform, activatorEvent 
   };
 };
 
+const Divider = () => <span aria-hidden className="mx-1 hidden h-5 w-px bg-line sm:block" />;
+
 export default function Grade() {
+  const isMobile = useMediaQuery("(max-width: 767px)");
+  // hooks de dados ficam no componente do desktop: o celular tem a própria tela
+  return isMobile ? <GradeMobile /> : <GradeDesktop />;
+}
+
+function GradeDesktop() {
+  const toast = useToast();
   const sched = useGradeSchedule();
   const { rows, updateBlock, addBlock, deleteBlock } = sched;
-  const isMobile = useIsMobile();
 
   // blocos com PATCH em andamento (contorno tracejado = alteração não salva ainda)
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
@@ -102,27 +123,10 @@ export default function Grade() {
   );
 
   // linha "agora" (atualizada a cada 30s)
-  const [now, setNow] = useState(() => ({
-    dow: new Date().getDay(),
-    min: new Date().getHours() * 60 + new Date().getMinutes(),
-  }));
-  useEffect(() => {
-    const t = setInterval(
-      () =>
-        setNow({
-          dow: new Date().getDay(),
-          min: new Date().getHours() * 60 + new Date().getMinutes(),
-        }),
-      30_000,
-    );
-    return () => clearInterval(t);
-  }, []);
+  const clock = useNow(30_000);
+  const now = { dow: clock.getDay(), min: clock.getHours() * 60 + clock.getMinutes() };
 
-  const { data: playout } = useQuery({
-    queryKey: ["playout"],
-    queryFn: () => api.get<PlayoutState>("/playout/state"),
-    refetchInterval: 15000,
-  });
+  const { data: playout } = usePlayoutState();
   // "no ar" = só o bloco em execução (programa do estado + dia + faixa contendo agora),
   // não todos os blocos do gênero (o auto-programa é compartilhado entre blocos)
   const onAirBlockId = useMemo(() => {
@@ -136,12 +140,12 @@ export default function Grade() {
         now.min < toMin(r.endTime),
     );
     return row?.id ?? null;
-  }, [playout, rows, now]);
+  }, [playout, rows, now.dow, now.min]);
 
   const [selId, setSelId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [zoom, setZoom] = useState<Zoom>("auto");
-  const [libOpen, setLibOpen] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useLocalStorage("antenna.grade.drawer", true);
   const [preview, setPreviewState] = useState<Preview | null>(null);
   const previewRef = useRef<Preview | null>(null);
   const setPreview = (p: Preview | null) => {
@@ -175,8 +179,7 @@ export default function Grade() {
     setViewW(el.clientWidth);
   }, []);
 
-  const autoPx = pxPerMinAuto(viewW);
-  const px = zoom === "auto" ? autoPx : zoom;
+  const px = zoom === "auto" ? pxPerMinAuto(viewW) : zoom;
   const hourPx = px * 60;
 
   // ---- refs dos trilhos (geometria p/ drag/preview) ----
@@ -230,7 +233,7 @@ export default function Grade() {
         valid: true,
       });
     },
-    [px, trackLeft],
+    [],
   );
 
   const onPickMove = useCallback(
@@ -278,14 +281,18 @@ export default function Grade() {
       setPreview(null);
       if (!d.moved || !p) return; // clique simples = só seleção
       const changed = p.dow !== d.dow || p.start !== d.startMin || p.end !== d.endMin;
-      if (!p.valid || !changed) return; // inválido → volta ao lugar (sem salvar)
+      if (!changed) return;
+      if (!p.valid) {
+        toast("Esse horário já tem outro bloco", { tone: "error" });
+        return; // inválido → volta ao lugar (sem salvar)
+      }
       void updateTracked(d.id, {
         dayOfWeek: p.dow,
         startTime: minutesToHHMM(p.start),
         endTime: minutesToHHMM(p.end),
       });
     },
-    [updateTracked],
+    [toast, updateTracked],
   );
 
   // ---- dnd-kit: biblioteca → timeline ----
@@ -306,8 +313,7 @@ export default function Grade() {
   // posição do bloco a partir do ponteiro: INÍCIO no cursor (soltar = bloco começa
   // onde você apontou; snap 5 min), não centralizado — evita a sensação de "cai à direita"
   const libPreview = useCallback((): Preview | null => {
-    const genre = libGenre.current;
-    if (!genre) return null;
+    if (!libGenre.current) return null;
     const { x: pointerX, y: pointerY } = rawPointer.current;
     const dow = laneUnder(pointerY);
     if (dow === null) return null;
@@ -350,14 +356,17 @@ export default function Grade() {
     setLibActive(null);
     setPreview(null);
     if (!genre || !p) return;
-    if (!p.valid) return; // conflito → nada acontece
+    if (!p.valid) {
+      toast("Sem espaço livre nesse horário", { tone: "error" });
+      return;
+    }
     void addBlock({
       genreId: genre.id,
       dayOfWeek: p.dow,
       startTime: minutesToHHMM(p.start),
       endTime: minutesToHHMM(p.end),
     });
-  }, [addBlock, stopRawTrack]);
+  }, [addBlock, stopRawTrack, toast]);
 
   const onDragCancel = useCallback(() => {
     stopRawTrack();
@@ -373,37 +382,48 @@ export default function Grade() {
     (row: ScheduleRow) => {
       const dur = toMin(row.endTime) - toMin(row.startTime);
       const slot = firstFreeSlot(rows, row.dayOfWeek, dur, toMin(row.endTime));
-      if (!slot) return;
+      if (!slot) {
+        toast(`Sem horário livre em ${DOWS[row.dayOfWeek][1].toLowerCase()} para duplicar`, {
+          tone: "error",
+        });
+        return;
+      }
+      const at = {
+        dayOfWeek: row.dayOfWeek,
+        startTime: minutesToHHMM(slot.start),
+        endTime: minutesToHHMM(slot.end),
+      };
       void addBlock(
         row.program.genre
-          ? {
-              genreId: row.program.genre.id,
-              dayOfWeek: row.dayOfWeek,
-              startTime: minutesToHHMM(slot.start),
-              endTime: minutesToHHMM(slot.end),
-            }
-          : {
-              programId: row.program.id,
-              dayOfWeek: row.dayOfWeek,
-              startTime: minutesToHHMM(slot.start),
-              endTime: minutesToHHMM(slot.end),
-            },
+          ? { genreId: row.program.genre.id, ...at }
+          : { programId: row.program.id, ...at },
+      ).then((r) => r === true && toast(`Duplicado para ${at.startTime}–${at.endTime}`));
+    },
+    [addBlock, rows, toast],
+  );
+
+  const remove = useCallback(
+    (row: ScheduleRow) => {
+      setSelId(null);
+      void deleteBlock(row).then(
+        (r) => r === true && toast("Bloco excluído · Ctrl+Z desfaz", { icon: Trash2 }),
       );
     },
-    [addBlock, rows],
+    [deleteBlock, toast],
   );
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (modal) return;
+      if (modal || document.querySelector("[role=dialog]")) return;
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
       if (tag === "input" || tag === "select" || tag === "textarea") return;
       const ctl = e.ctrlKey || e.metaKey;
-      if (ctl && e.key.toLowerCase() === "z") {
+      const key = e.key.toLowerCase();
+      if (ctl && key === "z") {
         e.preventDefault();
         if (e.shiftKey) void sched.redo();
         else void sched.undo();
-      } else if (ctl && e.key.toLowerCase() === "y") {
+      } else if (ctl && key === "y") {
         e.preventDefault();
         void sched.redo();
       } else if (e.key === "Delete" || e.key === "Backspace") {
@@ -413,44 +433,36 @@ export default function Grade() {
             `Remover o bloco "${selected.program.name}" (${DOWS[selected.dayOfWeek][0]} ${selected.startTime}–${selected.endTime})?`,
           )
         )
-          void deleteBlock(selected);
-      } else if (e.key.toLowerCase() === "d" && selected) {
+          remove(selected);
+      } else if (ctl) {
+        return;
+      } else if (key === "d" && selected) {
         e.preventDefault();
         duplicate(selected);
-      } else if (e.key.toLowerCase() === "n") {
+      } else if (key === "n") {
         e.preventDefault();
-        setModal({});
+        setModal({ dow: now.dow });
+      } else if (key === "b") {
+        setDrawerOpen((v) => !v);
       } else if (e.key === "Escape") {
         setSelId(null);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [deleteBlock, duplicate, modal, sched, selected]);
+  }, [duplicate, modal, now.dow, remove, sched, selected, setDrawerOpen]);
 
-  // ---- zoom: escada de degraus (auto incluído) com âncora no centro da janela ----
-  const laneNames = useMemo(() => DOWS.map(([, full]) => full), []);
-  // auto (~0.9) não é um degrau: ações sempre andam degrau a degrau e param nas pontas,
-  // em vez de saltar (antes: menos-zoom no mínimo voltava pro auto, que AUMENTAVA o zoom)
+  // ---- zoom: escada de degraus com âncora no centro da janela ----
   const anchorMin = useRef<number | null>(null);
-  const changeZoomRaw = (next: Zoom) => {
+  const changeZoom = (next: Zoom) => {
     const sc = scrollerRef.current;
     if (sc && sc.clientWidth)
       anchorMin.current = (sc.scrollLeft + sc.clientWidth / 2 - LABEL_W) / px;
     setZoom(next);
   };
-  const zoomIn = () => {
-    const next = ZOOM_STEPS.find((z) => z > px + 0.01);
-    if (!next) return; // teto
-    changeZoomRaw(clampedPx(next));
-  };
-  const zoomOut = () => {
-    const prev = [...ZOOM_STEPS].reverse().find((z) => z < px - 0.01);
-    if (!prev) return; // piso
-    changeZoomRaw(clampedPx(prev));
-  };
-  const atCeiling = !ZOOM_STEPS.some((z) => z > px + 0.01);
-  const atFloor = !ZOOM_STEPS.some((z) => z < px - 0.01);
+  // auto (~0.9) não é um degrau: ações sempre andam degrau a degrau e param nas pontas
+  const nextUp = ZOOM_STEPS.find((z) => z > px + 0.01);
+  const nextDown = [...ZOOM_STEPS].reverse().find((z) => z < px - 0.01);
   useEffect(() => {
     const m = anchorMin.current;
     if (m == null) return;
@@ -464,144 +476,26 @@ export default function Grade() {
     rows.filter((r) => r.dayOfWeek === dow).sort((a, b) => toMin(a.startTime) - toMin(b.startTime)),
   );
 
-  // toast pós-apply de perfil (some sozinho)
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const notify = useCallback((msg: string) => {
-    setToast(msg);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 6000);
-  }, []);
-
-  const pill = sched.saving ? (
-    <StatusPill tone="signal" pulse text="salvando…" />
+  const saveState = sched.saving ? (
+    <>
+      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Salvando…
+    </>
   ) : sched.status.kind === "error" ? (
-    <span title={sched.status.msg ?? "falha ao salvar"}>
-      <StatusPill tone="red" text="falhou (desfeito)" />
+    <span className="flex items-center gap-1.5 text-danger" title={sched.status.msg}>
+      <AlertCircle className="h-3.5 w-3.5" aria-hidden /> Falhou — desfeito
     </span>
   ) : sched.status.kind === "ok" ? (
-    <StatusPill tone="green" text="salvo" />
+    <>
+      <Check className="h-3.5 w-3.5 text-ok" aria-hidden /> Salvo · vale no próximo tick
+    </>
   ) : (
-    <StatusPill tone="muted" text="sem alterações" />
+    <>
+      <CircleCheck className="h-3.5 w-3.5" aria-hidden /> Tudo salvo
+    </>
   );
-
-  if (isMobile) return <GradeMobile />;
 
   return (
     <div className="flex flex-col">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-xl text-xs text-muted">
-          arraste da biblioteca · corpo = mover · bordas = redimensionar · clique = selecionar ·
-          fora dos blocos: seleção automática
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {toast && <StatusPill tone="green" text={toast} />}
-          {pill}
-          <div
-            className="flex h-8 items-center gap-0.5 rounded-lg border border-muted/10 bg-surface p-1 shadow-sm shadow-black/10"
-            title="Desfazer (Ctrl+Z) / Refazer (Ctrl+Y)"
-          >
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 px-1.5"
-              onClick={() => void sched.undo()}
-              disabled={sched.saving}
-              title="Desfazer (Ctrl+Z)"
-            >
-              <Undo2 size={15} />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 px-1.5"
-              onClick={() => void sched.redo()}
-              disabled={sched.saving}
-              title="Refazer (Ctrl+Y)"
-            >
-              <Redo2 size={15} />
-            </Button>
-          </div>
-          <ProfilesMenu
-            gradeCount={rows.length}
-            onApplied={(orphans) => {
-              sched.resetHistory();
-              notify(
-                orphans
-                  ? `perfil aplicado — ${orphans} bloco(s) de gênero removido ficará na seleção automática`
-                  : "perfil aplicado — grade substituída",
-              );
-            }}
-            onCleared={(removed) => {
-              sched.resetHistory();
-              notify(
-                `grade limpa — ${removed} bloco(s) removido(s) (seleção automática até programar de novo)`,
-              );
-            }}
-          />
-          <div
-            className="flex h-8 items-center gap-0.5 rounded-lg border border-muted/10 bg-surface p-1 shadow-sm shadow-black/10"
-            title="Zoom da timeline"
-          >
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 px-1.5"
-              onClick={zoomOut}
-              disabled={atFloor}
-              title="Menos zoom"
-            >
-              <ZoomOut size={15} />
-            </Button>
-            <Dropdown
-              trigger={
-                <span className="min-w-9 text-center font-mono">
-                  {zoom === "auto" ? "auto" : String(zoom)}
-                </span>
-              }
-              options={[
-                { value: "auto", label: "auto" },
-                ...ZOOM_STEPS.map((z) => ({ value: String(z), label: String(z) })),
-              ]}
-              activeValue={String(zoom)}
-              onSelect={(v) =>
-                v === "auto" ? changeZoomRaw("auto") : changeZoomRaw(clampedPx(Number(v)))
-              }
-              title="Zoom da timeline (px por minuto)"
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 px-1.5"
-              onClick={zoomIn}
-              disabled={atCeiling}
-              title="Mais zoom"
-            >
-              <ZoomIn size={15} />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className={"h-6 px-1.5 " + (zoom === "auto" ? "text-signal" : "")}
-              onClick={() => changeZoomRaw("auto")}
-              title="Ajustar a semana inteira na tela (auto)"
-            >
-              <Maximize size={15} />
-            </Button>
-          </div>
-          <Button
-            variant="signal"
-            className="flex h-8 items-center"
-            onClick={() => setModal({ dow: now.dow })}
-            title="Programar bloco (N)"
-          >
-            <span className="flex items-center gap-1.5">
-              <Plus size={15} /> Programar
-            </span>
-          </Button>
-        </div>
-      </div>
-
       {sched.isLoading ? (
         <Spinner />
       ) : (
@@ -613,91 +507,185 @@ export default function Grade() {
           onDragEnd={onDragEnd}
           onDragCancel={onDragCancel}
         >
-          <div className={"flex items-start gap-3" + (libActive ? " cursor-copy" : "")}>
-            <LibraryPanel
-              open={libOpen}
-              onToggle={() => setLibOpen((v) => !v)}
-              onNewBlock={() => setModal({})}
-            />
-            <Card flush className="min-w-0 flex-1">
-              <div
-                ref={scrollerRefCb}
-                className="overflow-y-auto overflow-x-auto rounded-lg"
-                style={{ maxHeight: "calc(100vh - 170px)" }}
+          <Card className={cn("overflow-visible", libActive && "cursor-copy")}>
+            {/* ---------- toolbar da timeline ---------- */}
+            <div className="flex flex-wrap items-center gap-1 border-b border-line px-3 py-2.5">
+              <ProfilesMenu
+                gradeCount={rows.length}
+                onApplied={(orphans) => {
+                  sched.resetHistory();
+                  toast(
+                    orphans
+                      ? `Perfil aplicado — ${orphans} bloco(s) de gênero removido ficam na seleção automática`
+                      : "Perfil aplicado — grade substituída",
+                  );
+                }}
+                onCleared={(removed) => {
+                  sched.resetHistory();
+                  toast(`Grade limpa — ${removed} bloco(s) removido(s)`);
+                }}
+              />
+              <Divider />
+              <IconButton
+                icon={Undo2}
+                label="Desfazer (Ctrl+Z)"
+                onClick={() => void sched.undo()}
+                disabled={sched.saving}
+              />
+              <IconButton
+                icon={Redo2}
+                label="Refazer (Ctrl+Y)"
+                onClick={() => void sched.redo()}
+                disabled={sched.saving}
+              />
+              <Divider />
+              <IconButton
+                icon={ZoomOut}
+                label="Menos zoom"
+                disabled={!nextDown}
+                onClick={() => nextDown && changeZoom(clampedPx(nextDown))}
+              />
+              <Dropdown
+                title="Zoom da timeline (px por minuto)"
+                value={String(zoom)}
+                options={[
+                  { value: "auto", label: "auto" },
+                  ...ZOOM_STEPS.map((z) => ({ value: String(z), label: `${z}×` })),
+                ]}
+                onSelect={(v) => changeZoom(v === "auto" ? "auto" : clampedPx(Number(v)))}
+                renderLabel={(o) => <span className="min-w-8 text-center tnum">{o?.label}</span>}
+              />
+              <IconButton
+                icon={ZoomIn}
+                label="Mais zoom"
+                disabled={!nextUp}
+                onClick={() => nextUp && changeZoom(clampedPx(nextUp))}
+              />
+              <IconButton
+                icon={Maximize}
+                label="Semana inteira na tela (auto)"
+                active={zoom === "auto"}
+                onClick={() => changeZoom("auto")}
+              />
+              <span
+                className="ml-2 hidden items-center gap-1.5 text-xs text-dim lg:flex"
+                aria-live="polite"
               >
-                <div style={{ width: LABEL_W + 1440 * px + 2 }} className="relative">
-                  {/* régua (sticky) — altura fixa: os rótulos ficam NELA, não sobre a 1ª trilha */}
-                  <div className="sticky top-0 z-30 flex h-7 border-b border-muted/20 bg-surface">
-                    <div className="sticky left-0 z-40 h-7 w-20 shrink-0 border-r border-muted/20 bg-surface" />
-                    <div className="relative" style={{ width: 1440 * px }}>
-                      {Array.from({ length: 25 }, (_, h) => (
-                        <div
+                {saveState}
+              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={PanelBottom}
+                  className={cn(drawerOpen && "text-brand hover:text-brand")}
+                  aria-pressed={drawerOpen}
+                  onClick={() => setDrawerOpen((v) => !v)}
+                  title="Mostrar/ocultar biblioteca (B)"
+                >
+                  Biblioteca
+                </Button>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={Plus}
+                  onClick={() => setModal({ dow: now.dow })}
+                  title="Programar bloco (N)"
+                >
+                  Programar
+                </Button>
+              </div>
+            </div>
+
+            {/* ---------- timeline ---------- */}
+            <div
+              ref={scrollerRefCb}
+              className="overflow-auto"
+              style={{
+                maxHeight: drawerOpen ? "calc(100vh - 340px)" : "calc(100vh - 230px)",
+                minHeight: 280,
+              }}
+            >
+              <div style={{ width: LABEL_W + 1440 * px + 2 }} className="relative">
+                {/* régua (sticky) */}
+                <div className="sticky top-0 z-30 flex h-8 border-b border-line bg-panel">
+                  <div
+                    className="sticky left-0 z-40 h-8 shrink-0 border-r border-line bg-panel"
+                    style={{ width: LABEL_W }}
+                  />
+                  <div className="relative" style={{ width: 1440 * px }}>
+                    {Array.from({ length: 24 }, (_, h) =>
+                      hourPx >= 22 || h % 3 === 0 ? (
+                        <span
                           key={h}
-                          className="absolute top-0 flex h-7 items-end"
+                          className="absolute bottom-1.5 pl-1.5 text-[11px] text-dim tnum"
                           style={{ left: h * hourPx }}
                         >
-                          {h < 24 && (px * 60 >= 22 || h % 3 === 0) ? (
-                            <span className="pl-1 font-mono text-[10px] text-muted">
-                              {String(h % 24).padStart(2, "0")}h
-                            </span>
-                          ) : null}
-                        </div>
-                      ))}
-                      {/* pill de horário na régua durante o arraste da biblioteca */}
-                      {libActive && preview && (
-                        <div
-                          className="pointer-events-none absolute inset-y-0 z-40"
-                          style={{ left: preview.start * px }}
-                        >
-                          <span className="absolute left-0 -translate-x-1/2 rounded bg-signal px-1 pt-0.5 font-mono text-[10px] font-bold leading-none text-background">
-                            {minutesToHHMM(preview.start)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                          {String(h).padStart(2, "0")}h
+                        </span>
+                      ) : null,
+                    )}
+                    {/* horário na régua durante o arraste da biblioteca */}
+                    {libActive && preview && (
+                      <span
+                        className="pointer-events-none absolute bottom-1 z-40 -translate-x-1/2 rounded bg-brand px-1 text-[10px] font-semibold text-brand-ink tnum"
+                        style={{ left: preview.start * px }}
+                      >
+                        {minutesToHHMM(preview.start)}
+                      </span>
+                    )}
                   </div>
-                  {byDay.map((blocks, dow) => (
-                    <DayLane
-                      key={dow}
-                      dow={dow}
-                      name={laneNames[dow]}
-                      px={px}
-                      hourPx={hourPx}
-                      blocks={blocks}
-                      today={dow === now.dow}
-                      nowMin={dow === now.dow ? now.min : null}
-                      onAirBlockId={onAirBlockId}
-                      guideMin={libActive && preview ? preview.start : null}
-                      selectedId={selId}
-                      pendingIds={pendingIds}
-                      preview={preview}
-                      registerTrack={registerTrack}
-                      onPick={onPick}
-                      onPickMove={onPickMove}
-                      onPickUp={onPickUp}
-                      onOpen={(row) => setSelId(row.id)}
-                      onDuplicate={duplicate}
-                      onDelete={(row) => {
-                        void deleteBlock(row);
-                        setSelId(null);
-                      }}
-                    />
-                  ))}
                 </div>
+                {DISPLAY_ORDER.map((dow) => (
+                  <DayLane
+                    key={dow}
+                    dow={dow}
+                    name={DOWS[dow][0]}
+                    px={px}
+                    hourPx={hourPx}
+                    blocks={byDay[dow]}
+                    today={dow === now.dow}
+                    nowMin={dow === now.dow ? now.min : null}
+                    onAirBlockId={onAirBlockId}
+                    guideMin={libActive && preview ? preview.start : null}
+                    selectedId={selId}
+                    pendingIds={pendingIds}
+                    preview={preview}
+                    registerTrack={registerTrack}
+                    onPick={onPick}
+                    onPickMove={onPickMove}
+                    onPickUp={onPickUp}
+                    onDuplicate={duplicate}
+                    onDelete={remove}
+                  />
+                ))}
               </div>
-              <div className="border-t border-muted/10 px-3 py-2 text-[11px] text-muted">
-                arrastar = mover · bordas = redimensionar · clique = selecionar · <kbd>N</kbd> novo
-                · <kbd>D</kbd> duplicar · <kbd>Del</kbd> excluir · <kbd>Ctrl+Z</kbd>/
-                <kbd>Ctrl+Y</kbd>
-              </div>
-            </Card>
-          </div>
+            </div>
+
+            {/* ---------- rodapé: seleção / atalhos ---------- */}
+            <div className="flex min-h-[40px] flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-4 py-2 text-xs text-dim">
+              {selected ? (
+                <span className="animate-fade-in">
+                  <span className="text-sub">{selected.program.name}</span> ·{" "}
+                  {DOWS[selected.dayOfWeek][1]} {selected.startTime}–{selected.endTime} ·{" "}
+                  <Kbd>D</Kbd> duplica · <Kbd>Del</Kbd> exclui · <Kbd>Esc</Kbd> limpa a seleção
+                </span>
+              ) : (
+                <span>
+                  Arraste da biblioteca para criar · arraste o bloco para mover (inclusive entre
+                  dias) · puxe as bordas para redimensionar · <Kbd>N</Kbd> novo · <Kbd>B</Kbd>{" "}
+                  biblioteca · <Kbd>Ctrl+Z</Kbd> desfaz
+                </span>
+              )}
+            </div>
+          </Card>
+
+          <LibraryDrawer open={drawerOpen} onToggle={() => setDrawerOpen((v) => !v)} rows={rows} />
+
           <DragOverlay dropAnimation={null}>
             {libActive ? (
-              <div
-                className="rounded-lg border bg-surface px-2 py-1.5 text-xs shadow-lg shadow-black/40"
-                style={{ borderLeft: `3px solid ${libActive.color}` }}
-              >
+              <div className="flex items-center gap-2 rounded-lg border border-line bg-raised px-2.5 py-1.5 text-[13px] shadow-pop">
+                <GenreTile icon={libActive.icon} color={libActive.color} size="xs" />
                 {libActive.name}
               </div>
             ) : null}

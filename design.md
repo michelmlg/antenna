@@ -39,43 +39,43 @@ explícita.
   glassmorphism excessivo e gradientes decorativos.
 
 2. Identidade visual e tokens
-   As cores atuais são mantidas. Os valores devem continuar centralizados
-   no tema do Tailwind; não espalhar hexadecimais pelos componentes.
-   Token Valor Uso
-   background #171717 Fundo geral da
-   aplicação
+   Identidade v3 (azul-ardósia + âmbar, minimalista). Os valores ficam
+   centralizados no tema do Tailwind; não espalhar hexadecimais pelos
+   componentes.
 
-surface #292929 Sidebar, cards,
-painéis, modais e
-campos
+| Token   | Valor   | Uso                                                  |
+| ------- | ------- | ---------------------------------------------------- |
+| base    | #0F141B | Fundo geral da aplicação                             |
+| panel   | #151B24 | Sidebar, cards, modais                               |
+| raised  | #1C2430 | Campos, hover, itens dentro de cards                 |
+| line    | #263040 | Bordas e divisórias                                  |
+| element | #374151 | Controles neutros (switch desligado, segmento ativo) |
+| fg      | #E5E7EB | Texto principal                                      |
+| sub     | #9CA3AF | Texto secundário                                     |
+| dim     | #6B7280 | Metadados e dicas                                    |
+| brand   | #FFC83D | Ação primária, navegação ativa, seleção, foco        |
+| live    | #F05252 | Selo AO VIVO (luz de estúdio)                        |
+| danger  | #F05252 | Erros, conflitos e ações destrutivas                 |
+| ok      | #34D399 | Saúde/sucesso                                        |
 
-signal #FFB547 Ação primária, seleção,
-indicador AO VIVO e
-foco de marca
+Marca: `components/Logo.tsx` (torre em "A" com ondas, `currentColor`),
+também como marca d'água do canal no player.
 
-foreground #FAFAF5 Texto principal e
-ícones de alto
-contraste
-
-muted #A3A3A3 Texto secundário,
-metadados e elementos
-discretos
-
-danger #EF4444 Erros, conflitos e
-ações destrutivas
-(exclusão)
 Aplicação das cores
 
-- background deve formar o plano principal da aplicação.
-- surface deve ser usado em áreas funcionais distintas, sem colocar
-  um card dentro de outro card sem necessidade.
-- signal deve ser aplicado de forma seletiva. Botões primários, item
-  de navegação selecionado e status AO VIVO podem usar o âmbar; botões
-  secundários não devem competir com eles.
-- muted não deve ser usado para texto essencial com contraste
-  insuficiente.
+- base forma o plano principal; panel separa áreas funcionais, sem
+  card dentro de card sem necessidade; raised é o nível interativo.
+- brand deve ser aplicado de forma seletiva: botão primário, item de
+  navegação ativo e seleção. AO VIVO usa live, não brand.
+- dim não deve ser usado para texto essencial.
 - Transparências podem usar modificadores do Tailwind, como
-  bg-signal/10 e border-signal/30, sem inventar tons hexadecimais.
+  bg-brand/10 e border-line, sem inventar tons hexadecimais. A cor do
+  gênero é dado do usuário: tons derivados vêm de `lib/color.ts`
+  (`alpha`, `readableOn`).
+- Movimento: interações curtas e consistentes (botão primário sobe 1px
+  com brilho âmbar no hover, pressionar encolhe 3%, indicadores de
+  tabs/segmentos deslizam, modais e menus entram com pop-in). Tudo
+  respeita prefers-reduced-motion.
 - Para erro, sucesso e aviso, usar tokens semânticos centralizados no
   tema. Não reutilizar âmbar como se fosse erro. Essas cores
   semânticas são exceções funcionais e devem ser usadas com moderação.

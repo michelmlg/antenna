@@ -19,4 +19,6 @@ export const config = {
   syncHours: num("CONTENT_SYNC_HOURS", 6),
   prewarmMin: num("CONTENT_SYNC_PREWARM_MIN", 15),
   adminToken: process.env.ADMIN_TOKEN || "",
+  // logo da personalização (data/ é montado igual no api e no playout)
+  brandingDir: process.env.BRANDING_DIR || path.resolve(__dirname, "../../..", "data", "branding"),
 };
