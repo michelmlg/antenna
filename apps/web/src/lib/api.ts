@@ -1,3 +1,5 @@
+import type { PlayoutHealth, QuarantineEntry } from "@antenna/shared";
+
 /** Cliente HTTP da API (mesma origem; nginx/dev-proxy cuida do encaminhamento). */
 async function req(method: string, path: string, body?: unknown): Promise<unknown> {
   const res = await fetch("/api/v1" + path, {
@@ -155,6 +157,8 @@ export interface PlayoutState {
   restarts: number;
   lastError: string | null;
   fallbackMediaId: string | null;
+  health?: PlayoutHealth;
+  quarantine?: QuarantineEntry[];
   stale?: boolean;
   workerOnline?: boolean;
 }

@@ -61,6 +61,14 @@ playoutRoutes.post(
   })
 );
 
+// DELETE /playout/quarantine[/:mediaId] — devolve vídeo(s) à rotação
+playoutRoutes.delete(
+  "/quarantine/:mediaId?",
+  wrap(async (req, res) => {
+    res.json(await worker.post("/cmd/release-quarantine", { mediaId: req.params.mediaId ?? null }));
+  })
+);
+
 playoutRoutes.get(
   "/queue",
   wrap(async (req, res) => {

@@ -135,6 +135,79 @@ export const queueItemSchema = z.object({
 });
 export type QueueItem = z.infer<typeof queueItemSchema>;
 
+// ---------- falhas de reprodução ----------
+/** Causa classificada de uma falha (ver packages/core/failures). */
+export const FAILURE_KINDS = [
+  "source_forbidden", // YouTube/CDN recusou a URL (403)
+  "source_unresolvable", // yt-dlp não achou stream (bot-check, indisponível...)
+  "sink_unreachable", // mediamtx fora do ar / sem rede / DNS
+  "input_died", // demuxer desistiu de um input no meio da exibição
+  "unknown",
+] as const;
+export type FailureKind = (typeof FAILURE_KINDS)[number];
+
+/** Rótulo curto + explicação + de quem é a culpa (vídeo ou infraestrutura). */
+export const FAILURE_INFO: Record<FailureKind, { label: string; hint: string; blame: "media" | "infra" | "unknown" }> = {
+  source_forbidden: {
+    label: "YouTube recusou (403)",
+    hint: "A URL do vídeo foi negada pelo servidor de mídia. Costuma ser transitório ou específico do vídeo.",
+    blame: "media",
+  },
+  source_unresolvable: {
+    label: "Vídeo não resolvido",
+    hint: "O yt-dlp não obteve o stream (vídeo indisponível, bot-check ou limite do YouTube).",
+    blame: "media",
+  },
+  sink_unreachable: {
+    label: "MediaMTX inacessível",
+    hint: "O worker não consegue publicar no MediaMTX (container parado, sem rede ou DNS). O vídeo não tem culpa.",
+    blame: "infra",
+  },
+  input_died: {
+    label: "Stream interrompido",
+    hint: "O vídeo ou o áudio parou no meio da exibição.",
+    blame: "media",
+  },
+  unknown: { label: "Falha desconhecida", hint: "Veja a linha bruta do ffmpeg no log do worker.", blame: "unknown" },
+};
+
+/** `result` do histórico: "error" legado ou "error:<kind>". */
+export function parseHistoryResult(result: string): { base: string; kind: FailureKind | null } {
+  if (!result.startsWith("error:")) return { base: result, kind: null };
+  const k = result.slice(6) as FailureKind;
+  return { base: "error", kind: (FAILURE_KINDS as readonly string[]).includes(k) ? k : "unknown" };
+}
+
+export const failureSchema = z.object({
+  kind: z.enum(FAILURE_KINDS),
+  message: z.string(),
+  title: z.string().nullable(),
+  at: z.string(),
+  attempt: z.number().nullable(),
+  maxAttempts: z.number().nullable(),
+});
+export type Failure = z.infer<typeof failureSchema>;
+
+export const quarantineEntrySchema = z.object({
+  mediaId: z.string(),
+  title: z.string(),
+  kind: z.enum(FAILURE_KINDS),
+  failures: z.number(),
+  until: z.string().nullable(), // null = ainda contando, sem quarentena
+});
+export type QuarantineEntry = z.infer<typeof quarantineEntrySchema>;
+
+/** Saúde do canal: ok | degraded (se recuperando) | blocked (disjuntor aberto). */
+export const playoutHealthSchema = z.object({
+  status: z.enum(["ok", "degraded", "blocked"]),
+  sink: z.enum(["ok", "down"]),
+  sinkFailures: z.number(), // falhas consecutivas de publicação
+  nextRetryAt: z.string().nullable(),
+  counts: z.record(z.string(), z.number()).default({}), // por FailureKind, desde o boot
+  lastFailure: failureSchema.nullable(),
+});
+export type PlayoutHealth = z.infer<typeof playoutHealthSchema>;
+
 /** Payload que o worker publica em PlayoutState (id=1) a cada tick. */
 export const playoutStatePayloadSchema = z.object({
   running: z.boolean(),
@@ -160,6 +233,9 @@ export const playoutStatePayloadSchema = z.object({
   restarts: z.number(),
   lastError: z.string().nullable(),
   fallbackMediaId: z.string().nullable(),
+  // campos novos são opcionais: payloads gravados por workers antigos continuam válidos
+  health: playoutHealthSchema.optional(),
+  quarantine: z.array(quarantineEntrySchema).optional(),
 });
 export type PlayoutStatePayload = z.infer<typeof playoutStatePayloadSchema>;
 

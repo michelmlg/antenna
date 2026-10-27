@@ -31,7 +31,8 @@ const wrap =
   };
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, running: playout.getState().running });
+  const st = playout.getState();
+  res.json({ ok: true, running: st.running, health: st.health?.status ?? "ok" });
 });
 
 app.get("/state", (_req, res) => res.json(playout.getState()));
@@ -68,6 +69,12 @@ app.post("/cmd/fallback", auth, wrap(async (req, res) => {
   await playout.setFallback(mediaId);
   await writeFallback(mediaId);
   res.json({ ok: true, fallbackMediaId: mediaId });
+}));
+
+// tira um vídeo (mediaId) ou todos da quarentena
+app.post("/cmd/release-quarantine", auth, wrap(async (req, res) => {
+  const mediaId = req.body?.mediaId ? String(req.body.mediaId) : undefined;
+  res.json({ released: playout.releaseQuarantine(mediaId) });
 }));
 
 app.get("/queue", wrap(async (_req, res) => {

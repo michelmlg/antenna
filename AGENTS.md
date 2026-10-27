@@ -93,11 +93,18 @@ nginx :3000 = front door (SPA, /api, /hls, /epg via API)
 8. **`MEDIA_MTX_URL`** aponta para `rtsp://mediamtx:8554` no compose e `rtsp://localhost:8554` no dev local — não "conserte" um para o outro.
 9. **Testes do engine usam linhas reais de stderr do ffmpeg** — ao mexer em classificação de erros, atualize os fixtures com saída de produção.
 
+10. **Falhas de reprodução são classificadas** (`packages/core/failures.ts`): infra
+    (`sink_unreachable`) repete o MESMO item e nunca vai pra quarentena; falha do
+    vídeo faz 3 tentativas e depois quarentena de 24 h (em memória). Não trate
+    `error` genérico — grave `error:<kind>` (`errorResult`) e atualize `FAILURE_INFO`.
+11. **MediaMTX "Up" mas sem rede** (Docker Desktop): `docker inspect -f '{{json .NetworkSettings.Networks}}' antenna-mediamtx`
+    vazio → `docker compose up -d --force-recreate mediamtx` (em `infra/`).
+
 ## Checklist antes de considerar pronto
 
 - [ ] `npm run typecheck` limpo
 - [ ] `npm run lint` limpo
-- [ ] `npm test` verde (43 testes no momento)
+- [ ] `npm test` verde (81 testes no momento)
 - [ ] `npm run build:web` OK (se tocou em `apps/web`)
 - [ ] Mudou rota/contrato? Atualizou `packages/shared` e o smoke dos endpoints (status codes esperados)?
 - [ ] Mexeu em seleção/filtros/grade/EPG? Testes novos em `packages/core`?
