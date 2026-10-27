@@ -18,3 +18,7 @@ data/branding/
 # logs e temporários
 *.log
 .cache/
+
+# skills de agentes (locais)
+.agents/
+skills-lock.json
