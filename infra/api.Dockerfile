@@ -15,6 +15,8 @@ COPY packages/database packages/database
 COPY packages/shared packages/shared
 COPY packages/core packages/core
 COPY apps/api apps/api
+# logo padrão da personalização (semeado em data/branding na 1ª leitura)
+COPY apps/web/public/logo-default-wordmark.png apps/web/public/
 RUN npx prisma generate --schema packages/database/prisma/schema.prisma
 
 ENV NODE_ENV=production

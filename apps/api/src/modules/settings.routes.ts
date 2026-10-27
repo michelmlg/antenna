@@ -19,13 +19,44 @@ export const settingsRoutes = Router();
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
+/** Logo padrão (a mesma imagem que o painel serve em /logo-default-wordmark.png). */
+const DEFAULT_LOGO_FILE = path.resolve(
+  __dirname,
+  "../../../web/public/logo-default-wordmark.png",
+);
+
+/**
+ * Primeira leitura sem personalização salva: grava o logo da Antenna (com
+ * nome) em data/branding, DESLIGADO. Só roda uma vez — remover o logo depois
+ * mantém a chave `logo` no banco, então o padrão não volta sozinho.
+ */
+async function seedDefaultLogo(): Promise<void> {
+  try {
+    const file = `logo-${Date.now()}.png`;
+    await fs.mkdir(config.brandingDir, { recursive: true });
+    await fs.copyFile(DEFAULT_LOGO_FILE, path.join(config.brandingDir, file));
+    await writeLogo(normalizeLogo({ file, enabled: false }));
+  } catch (err) {
+    logger.warn({ err }, "[branding] não foi possível criar o logo padrão");
+  }
+}
+
 async function readLogo(): Promise<{ logo: LogoSettings; updatedAt: Date | null }> {
-  const row = await prisma.channelSettings.findUnique({ where: { id: 1 } });
+  let row = await prisma.channelSettings.findUnique({ where: { id: 1 } });
   let raw: { logo?: Partial<LogoSettings> } = {};
   try {
     raw = JSON.parse(row?.branding || "{}");
   } catch {
     /* JSON corrompido → padrão */
+  }
+  if (!raw.logo) {
+    await seedDefaultLogo();
+    row = await prisma.channelSettings.findUnique({ where: { id: 1 } });
+    try {
+      raw = JSON.parse(row?.branding || "{}");
+    } catch {
+      raw = {};
+    }
   }
   return { logo: normalizeLogo(raw.logo), updatedAt: row?.updatedAt ?? null };
 }
