@@ -1,17 +1,55 @@
-# Antenna
+<p align="center">
+  <img src="apps/web/public/logo-default.png" alt="Antenna" width="120" />
+</p>
 
-**Um canal de TV linear (24/7) rodando no seu servidor local.**
+<h1 align="center">Antenna</h1>
+<h3 align="center">Seu próprio canal de TV, no ar 24 horas, no servidor da sua casa.</h3>
 
-O Antenna escolhe vídeos sozinho — do YouTube (via `yt-dlp`) e de arquivos locais —
-segundo **gêneros** e uma **grade semanal**, e transmite tudo como **um único canal ao vivo**
-na sua rede: abre no navegador, no VLC ou como canal de TV no Jellyfin/Plex. Um painel web
-controla o canal inteiro: o que está no ar, o que vem a seguir, a programação e as fontes.
+<p align="center">
+  <a href="LICENSE"><img alt="Licença MIT" src="https://img.shields.io/badge/licen%C3%A7a-MIT-FFC83D.svg" /></a>
+  <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-LAN-0F141B.svg" />
+  <img alt="Docker Compose" src="https://img.shields.io/badge/docker-compose-2496ED.svg?logo=docker&logoColor=white" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178C6.svg?logo=typescript&logoColor=white" />
+  <img alt="Node 20+" src="https://img.shields.io/badge/node-%E2%89%A5%2020-339933.svg?logo=node.js&logoColor=white" />
+</p>
 
-É **self-hosted** e pensado para a **rede local (LAN)**: sobe com um `docker compose up`,
-guarda tudo em um arquivo SQLite e não depende de nenhum serviço na nuvem além do próprio
-YouTube.
+---
 
-> Licença [MIT](LICENSE).
+> [!WARNING]
+> **Projeto pessoal, aberto ao público — sem vínculo, apoio ou garantia.**
+> O Antenna é um projeto de hobby, criado para uso doméstico em rede local e publicado
+> apenas para estudo e para quem quiser rodar o seu. Ele **não é afiliado ao YouTube/Google**,
+> ao [`yt-dlp`](https://github.com/yt-dlp/yt-dlp), ao FFmpeg, ao MediaMTX ou ao Jellyfin.
+>
+> - O Antenna **não hospeda, baixa nem redistribui** vídeos: ele apenas lista metadados
+>   e repassa, na sua rede, o stream que o `yt-dlp` resolve — e depende dele para isso.
+> - O uso do `yt-dlp` com o YouTube pode **violar os Termos de Serviço** da plataforma e
+>   o YouTube pode mudar ou bloquear o acesso a qualquer momento. **Qualquer problema**
+>   (bloqueio, conta/IP limitado, vídeos que deixam de tocar, notificações de direitos
+>   autorais) é de **responsabilidade exclusiva de quem usa**.
+> - Use só para fins **pessoais**, com conteúdo que você tem direito de assistir, e **não
+>   exponha o canal à internet** nem o use comercialmente.
+> - O software é fornecido "como está" (veja a [licença](LICENSE)), sem suporte garantido.
+
+---
+
+O **Antenna** é um sistema **self-hosted** que transforma vídeos do YouTube (via `yt-dlp`)
+e arquivos locais em **um único canal de TV linear** na sua rede. Em vez de escolher o que
+assistir, você liga o canal: ele decide sozinho o que vem a seguir, seguindo **gêneros** e
+uma **grade semanal** que você monta — como uma emissora de verdade, só que sua.
+
+O canal abre no navegador, no VLC ou como **canal de TV ao vivo no Jellyfin/Plex**, com
+guia de programação (EPG). Um painel web controla tudo: o que está no ar, a fila, a grade,
+as fontes e o logo da transmissão.
+
+Não há contas, nuvem nem telemetria: sobe com um `docker compose up`, guarda tudo em um
+arquivo SQLite e só conversa com o YouTube para buscar os vídeos.
+
+**Quer rodar o seu?** Vá direto para a [instalação](#instalação-docker) — em poucos
+minutos o canal está no ar.
+**Achou um problema?** Abra uma [issue](../../issues) com os logs do container `playout`.
+**Quer contribuir?** Leia o [`AGENTS.md`](AGENTS.md) e a seção [Desenvolvimento](#desenvolvimento).
+**Entender as decisões?** Veja [`docs/PLANO.md`](docs/PLANO.md) e o [`design.md`](design.md).
 
 ---
 
@@ -400,10 +438,8 @@ media/        arquivos locais de vídeo
 - O segredo `hlsCDNSecret` no `mediamtx.yml`/`nginx.conf` apenas evita o _cookie-check_
   do HLS para clientes como o Jellyfin; **não é um mecanismo de autenticação**. Troque-o
   nos dois arquivos se quiser um valor próprio.
-- O Antenna **não baixa nem armazena** os vídeos do YouTube: apenas lista metadados e
-  repassa o stream ao vivo na sua rede. Ainda assim, o uso de conteúdo de terceiros está
-  sujeito aos termos de cada serviço e à legislação de direitos autorais do seu país.
-  Use para fins pessoais/domésticos e por sua conta e risco.
+- Sobre o YouTube, o `yt-dlp` e direitos autorais, leia o [aviso no início](#antenna):
+  é um projeto pessoal, de uso doméstico e por sua conta e risco.
 
 ## Solução de problemas
 
