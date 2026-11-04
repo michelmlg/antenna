@@ -1,0 +1,98 @@
+# Antenna — tudo configurável pelo .env da raiz (cp .env.example .env).
+#   docker compose up -d --build
+name: antenna
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: antenna-mediamtx
+    restart: unless-stopped
+    ports:
+      - "${RTSP_PORT:-8554}:8554" # RTSP (VLC etc.)
+      - "${RTMP_PORT:-1935}:1935" # RTMP
+      - "${HLS_PORT:-8080}:8080" # HLS direto (opcional; o painel usa /hls via nginx)
+    volumes:
+      - ./infra/mediamtx.yml:/mediamtx.yml:ro
+
+  # A api cria/atualiza o banco no boot (prisma db push) — só ela escreve o
+  # schema; o playout espera ela ficar saudável para nunca disputar o SQLite.
+  api:
+    build:
+      context: .
+      dockerfile: infra/api.Dockerfile
+    container_name: antenna-api
+    restart: unless-stopped
+    depends_on:
+      - mediamtx
+    environment:
+      TZ: ${TZ:-America/Sao_Paulo}
+      CHANNEL: ${CHANNEL:-antenna}
+      # caminhos e hosts internos do container — não vêm do .env
+      DATA_DIR: /app/data
+      DATABASE_URL: file:/app/data/antenna.db?connection_limit=1&socket_timeout=15
+      API_PORT: 3001
+      PLAYOUT_URL: http://playout:3100
+      MTX_API_URL: http://mediamtx:9997
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  playout:
+    build:
+      context: .
+      dockerfile: infra/playout.Dockerfile
+    container_name: antenna-playout
+    restart: unless-stopped
+    depends_on:
+      mediamtx:
+        condition: service_started
+      api:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-America/Sao_Paulo}
+      CHANNEL: ${CHANNEL:-antenna}
+      DATA_DIR: /app/data
+      DATABASE_URL: file:/app/data/antenna.db?connection_limit=1&socket_timeout=15
+      MEDIA_MTX_URL: rtsp://mediamtx:8554
+      PLAYOUT_PORT: 3100
+      AUTOPLAY: ${AUTOPLAY:-true}
+      FALLBACK_MEDIA_ID: ${FALLBACK_MEDIA_ID:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      CONTENT_SYNC_HOURS: ${CONTENT_SYNC_HOURS:-6}
+      CONTENT_SYNC_PREWARM_MIN: ${CONTENT_SYNC_PREWARM_MIN:-15}
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data
+      - ${MEDIA_DIR:-./media}:/media
+    # "unhealthy" no `docker ps` = worker travado OU disjuntor do MediaMTX aberto
+    # (3+ falhas seguidas de publicação) — ver /health em apps/playout/src/control.ts
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3100/health').then(r=>r.json()).then(j=>process.exit(j.ok&&j.health!=='blocked'?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 2
+      start_period: 40s
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/web.Dockerfile
+    container_name: antenna-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-3000}:80"

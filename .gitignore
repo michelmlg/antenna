@@ -1,0 +1,24 @@
+# dependências
+node_modules/
+
+# builds
+apps/web/dist/
+*.tsbuildinfo
+
+# dados locais (banco nunca vai pro git)
+data/*
+!data/.gitkeep
+media/*
+!media/.gitkeep
+
+# ambiente
+.env
+.env.local
+
+# logs e temporários
+*.log
+.cache/
+
+# skills de agentes (locais)
+.agents/
+skills-lock.json

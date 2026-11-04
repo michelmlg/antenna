@@ -1,0 +1,16 @@
+{
+  "name": "@antenna/core",
+  "version": "2.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schedule": "./src/schedule.ts",
+    "./epg": "./src/epg.ts",
+    "./branding": "./src/branding.ts"
+  },
+  "dependencies": {
+    "@antenna/database": "*",
+    "@antenna/shared": "*"
+  }
+}
