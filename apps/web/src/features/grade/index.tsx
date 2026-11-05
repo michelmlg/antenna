@@ -1,5 +1,5 @@
 /**
- * Grade de Programação — timeline semanal (layout A do PLANO.md §16.1):
+ * Grade de Programação — timeline semanal:
  * 7 trilhas horizontais, régua compartilhada, blocos arrastáveis/redimensionáveis.
  * Toolbar no topo do card, biblioteca em gaveta abaixo (timeline em largura total).
  */
