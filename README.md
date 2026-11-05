@@ -13,6 +13,10 @@
   <img alt="Node 20+" src="https://img.shields.io/badge/node-%E2%89%A5%2020-339933.svg?logo=node.js&logoColor=white" />
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/inicio.png" alt="Painel do Antenna: player ao vivo, fila dos próximos vídeos e programação do dia" width="900" />
+</p>
+
 ---
 
 > [!NOTE]
@@ -44,6 +48,7 @@ minutos o canal está no ar.
 ## Sumário
 
 - [O que ele faz](#o-que-ele-faz)
+- [Telas](#telas)
 - [Como funciona](#como-funciona)
 - [Componentes](#componentes)
 - [O fluxo, passo a passo](#o-fluxo-passo-a-passo)
@@ -83,6 +88,76 @@ minutos o canal está no ar.
   gerado da sua grade — o canal aparece na guia de TV ao vivo com a programação.
 - **Resiliente**: classifica falhas (YouTube bloqueou? MediaMTX caiu? vídeo quebrado?),
   repete, coloca vídeo problemático em quarentena e se recupera sozinho.
+
+## Telas
+
+> Conteúdo de exemplo: canais oficiais e de licença aberta (NASA, Blender, YouTube),
+> usados apenas para ilustrar o painel.
+
+### Início — o canal no ar
+
+Player ao vivo, o que está tocando, a fila dos próximos vídeos (com miniaturas) e a
+programação do dia, com controles de **Parar** e **Pular**.
+
+<p align="center">
+  <img src="docs/screenshots/inicio.png" alt="Tela Início: player ao vivo, fila e programação de hoje" width="900" />
+</p>
+
+### Gêneros — fontes, acervo e mistura
+
+Cada gênero reúne **canais, buscas e links**. As fontes mostram as miniaturas dos vídeos
+sincronizados, e a **mistura** define quantos vídeos vêm de cada fonte, com um simulador
+da sequência.
+
+<p align="center">
+  <img src="docs/screenshots/genero-fontes.png" alt="Gênero Espaço com fontes expandidas mostrando miniaturas dos vídeos" width="900" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/genero-mistura.png" alt="Aba Mistura com ingredientes e simulador da sequência" width="900" />
+</p>
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/generos.png" alt="Lista de gêneros com cor, ícone e quantidade de vídeos" /><br />
+      <sub><b>Gêneros</b> — cor, ícone e horas na grade</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/assistir.png" alt="Tela Assistir com os endereços HLS, RTSP e M3U/XMLTV" /><br />
+      <sub><b>Assistir</b> — navegador, VLC e Jellyfin/IPTV</sub>
+    </td>
+  </tr>
+</table>
+
+### Grade semanal
+
+Editor visual da semana: arraste gêneros para os dias e horários, use **perfis** (ex.:
+"Semana normal", "Fim de semana"), desfaça/refaça e ajuste blocos. Há uma versão adaptada
+ao celular.
+
+<p align="center">
+  <img src="docs/screenshots/grade.png" alt="Editor da grade semanal com blocos coloridos por gênero" width="900" />
+</p>
+
+### Atividade, logo e celular
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/atividade.png" alt="Histórico do que foi ao ar e saúde do canal" /><br />
+      <sub><b>Atividade</b> — histórico, falhas e quarentena</sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/screenshots/personalizacao.png" alt="Configurações de personalização do logo na transmissão" /><br />
+      <sub><b>Personalização</b> — logo na transmissão</sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/grade-mobile.png" alt="Grade de programação no celular" width="320" />
+</p>
 
 ## Como funciona
 
