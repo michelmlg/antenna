@@ -1,3 +1,5 @@
+# Design system do painel
+
 Objetivo: orientar a implementação de uma interface visual, moderna,
 consistente e operacional para o Antenna, preservando a identidade dark
 com acento âmbar e os contratos técnicos já existentes.

@@ -8,9 +8,10 @@ Instruções para IA (e humanos) trabalharem neste repositório sem quebrar o ca
 vídeos (YouTube via yt-dlp + arquivos locais) por gênero/grade semanal e publica
 via FFmpeg → MediaMTX (HLS/RTSP); um painel web controla tudo.
 
-- `README.md` — como rodar.
-- `docs/PLANO.md` — plano de arquitetura + log de decisões versão a versão (leia antes de mexer em algo que pareça já decidido).
-- `design.md` — design técnico + design system do frontend.
+- `README.md` — visão geral; guias completos em `docs/` (índice em `docs/README.md`).
+- `docs/architecture.md` — componentes, fluxos e decisões de projeto (leia antes de mexer em algo que pareça já decidido).
+- `docs/design-system.md` — design técnico + design system do frontend.
+- `CONTRIBUTING.md` — ambiente de dev, verificações e convenções.
 
 ## Comandos
 
@@ -31,7 +32,7 @@ Docker (produção):
 
 ```bash
 docker compose up -d --build                # na raiz; portas/pastas vêm do .env central
-docker compose build playout && docker compose up -d playout   # atualizar yt-dlp (YouTube mudou algo)
+docker compose build --no-cache playout && docker compose up -d playout   # atualizar yt-dlp (YouTube mudou algo)
 ```
 
 ## Mapa do monorepo
